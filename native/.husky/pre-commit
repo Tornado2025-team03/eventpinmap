@@ -1,1 +1,2 @@
+cd native
 pnpm lint-staged --concurrent false
