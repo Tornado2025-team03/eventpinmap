@@ -6,7 +6,7 @@
 
 ## PowerShell をアップデート
 
-Windows ターミナルでは、Powershell を使用します。デフォルトでインストールされている Powershell は最新版でないため、アップデートします。
+Windows ターミナルでは、PowerShell を使用します。デフォルトでインストールされている PowerShell は最新版でないため、アップデートします。
 
 既存の PowerShell をアンインストールします。
 
