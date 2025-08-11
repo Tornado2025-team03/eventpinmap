@@ -16,7 +16,7 @@ brew install --cask visual-studio-code
 
 以下、全てにチェックマークを入れます。
 
-![](assets/04_windows_install-visual-studio-code.png)
+![](assets/01_windows_install-visual-studio-code.png)
 
 ## 拡張機能を追加
 
