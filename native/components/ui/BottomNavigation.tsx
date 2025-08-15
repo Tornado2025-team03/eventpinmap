@@ -49,7 +49,7 @@ export default function BottomNavigation({
         <View style={styles.sideContainer}>
           {tabs.slice(0, 2).map((tab, index) => {
             const isActive = state.index === index;
-            const Icon = tab.Icon!;
+            const Icon = tab.Icon;
             
             return (
               <TouchableOpacity
