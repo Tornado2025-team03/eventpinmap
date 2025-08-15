@@ -1,0 +1,9 @@
+import { View, Text } from "react-native";
+
+export default function BookingsScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <Text>予約一覧</Text>
+    </View>
+  );
+}
