@@ -1,0 +1,32 @@
+{
+  "version": 8,
+  "name": "GSI Pale Raster",
+  "center": [139.7671, 35.6812],
+  "zoom": 5,
+  "sources": {
+    "gsi-pale": {
+      "type": "raster",
+      "tiles": [
+        "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "attribution": "国土地理院"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#ffffff"
+      }
+    },
+    {
+      "id": "gsi-pale-layer",
+      "type": "raster",
+      "source": "gsi-pale",
+      "minzoom": 5,
+      "maxzoom": 18
+    }
+  ]
+}
