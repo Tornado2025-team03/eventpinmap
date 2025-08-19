@@ -2,12 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import {
-  Eye,
-  Users2,
-  ClipboardList,
-  Settings,
-} from "lucide-react-native";
+import { Eye, Users2, ClipboardList, Settings } from "lucide-react-native";
 
 export default function BottomNavigation({
   state,
@@ -44,13 +39,12 @@ export default function BottomNavigation({
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {/* メインコンテナ */}
       <View style={styles.tabContainer}>
-        
         {/* 左側のタブ（2つ） */}
         <View style={styles.sideContainer}>
           {tabs.slice(0, 2).map((tab, index) => {
             const isActive = state.index === index;
             const Icon = tab.Icon;
-            
+
             return (
               <TouchableOpacity
                 key={tab.key}
@@ -61,10 +55,12 @@ export default function BottomNavigation({
                   size={24}
                   color={isActive ? colors.active : colors.inactive}
                 />
-                <Text style={[
-                  styles.tabLabel,
-                  { color: isActive ? colors.active : colors.inactive }
-                ]}>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { color: isActive ? colors.active : colors.inactive },
+                  ]}
+                >
                   {tab.label}
                 </Text>
               </TouchableOpacity>
@@ -76,7 +72,7 @@ export default function BottomNavigation({
         <View style={styles.centerContainer}>
           {/* 半円の背景 */}
           <View style={styles.semicircleBackground} />
-          
+
           {/* 中央ボタン */}
           <TouchableOpacity
             style={styles.centerButton}
@@ -92,7 +88,7 @@ export default function BottomNavigation({
             const index = localIndex + 3;
             const isActive = state.index === index;
             const Icon = tab.Icon!;
-            
+
             return (
               <TouchableOpacity
                 key={tab.key}
@@ -103,17 +99,18 @@ export default function BottomNavigation({
                   size={24}
                   color={isActive ? colors.active : colors.inactive}
                 />
-                <Text style={[
-                  styles.tabLabel,
-                  { color: isActive ? colors.active : colors.inactive }
-                ]}>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { color: isActive ? colors.active : colors.inactive },
+                  ]}
+                >
                   {tab.label}
                 </Text>
               </TouchableOpacity>
             );
           })}
         </View>
-        
       </View>
     </View>
   );
@@ -131,7 +128,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.background,
   },
-  
+
   tabContainer: {
     height: 70,
     flexDirection: "row",
@@ -140,7 +137,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     position: "relative",
   },
-  
+
   // 左右のタブコンテナ
   sideContainer: {
     flex: 1,
@@ -149,7 +146,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     paddingBottom: 8,
   },
-  
+
   // 通常のタブボタン
   tabButton: {
     alignItems: "center",
@@ -157,13 +154,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
-  
+
   tabLabel: {
     fontSize: 12,
     marginTop: 4,
     textAlign: "center",
   },
-  
+
   // 中央コンテナ
   centerContainer: {
     alignItems: "center",
@@ -172,7 +169,7 @@ const styles = StyleSheet.create({
     height: 70,
     position: "relative",
   },
-  
+
   // 円の背景
   semicircleBackground: {
     position: "absolute",
@@ -187,7 +184,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  
+
   // 中央ボタン
   centerButton: {
     position: "absolute",
@@ -204,7 +201,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
   },
-  
+
   centerButtonText: {
     fontSize: 28,
     fontWeight: "bold",
