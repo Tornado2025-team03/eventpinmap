@@ -1,5 +1,5 @@
-import React, { useRef, useState, useEffect } from "react";
-import { View, StyleSheet, Text } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, StyleSheet, Linking } from "react-native";
 import MapLibreGL from "@maplibre/maplibre-react-native";
 
 const BASIC_BG_STYLE = {
@@ -14,12 +14,7 @@ const BASIC_BG_STYLE = {
 export default function MapScreen() {
   const cameraRef = useRef<MapLibreGL.CameraRef>(null);
   const [pin, setPin] = useState<[number, number] | null>(null);
-
-  useEffect(() => {
-    console.log("pin state updated:", pin);
-  }, [pin]);
-
-  const handleLongPress = (e: any) => {
+  const handlePress = (e: any) => {
     // 1) Dump the event so we see exactly what MapLibre sends on your device
     // rconsole.log('onLongPress raw event:', JSON.stringify(e?.nativeEvent ?? e));
 
@@ -45,8 +40,6 @@ export default function MapScreen() {
     // 3) Set pin and move camera (camera uses defaultSettings so it won’t reset)
     setPin([lng, lat]);
     cameraRef.current?.setCamera({
-      // centerCoordinate: [lng, lat],
-      // zoomLevel: 16,
       animationDuration: 500,
     });
   };
@@ -68,18 +61,9 @@ export default function MapScreen() {
         mapStyle={BASIC_BG_STYLE}
         logoEnabled={false}
         compassEnabled
-        onLongPress={handleLongPress}
-        // onMapError={(e) => console.warn("onMapError:", e.nativeEvent)}
-        // Add these props:
-        //maximumZoomLevel={18}
-        //minZoomLevel={5}
-        //reactionsEnabled={true}
+        onPress={handlePress}
         zoomEnabled={true}
         attributionEnabled={false}
-        //tileCountLimit={100}
-        // Tile download options
-        //tileCacheBudget={64} // in MB
-        //tileCacheMaxAge={7 * 24 * 3600 * 1000} // 7 days in milliseconds
       >
         <MapLibreGL.Camera
           ref={cameraRef}
@@ -87,21 +71,24 @@ export default function MapScreen() {
             centerCoordinate: [139.7671, 35.6812], // Tokyo Station
             zoomLevel: 5,
           }}
+          minZoomLevel={4}
+          maxZoomLevel={14}
         />
 
         {/* GSI Pale raster */}
         <MapLibreGL.RasterSource
           id="gsi-pale"
-          tileUrlTemplates={[
-            "	https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
-          ]}
-          tileSize={256}
+          tileUrlTemplates={["http://tile.openstreetmap.org/{z}/{x}/{y}.png"]}
+          // tileUrlTemplates={[
+          //   "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+          // ]}
+          minZoomLevel={4}
+          maxZoomLevel={14}
         >
           <MapLibreGL.RasterLayer id="gsi-pale-layer" sourceID="gsi-pale" />
         </MapLibreGL.RasterSource>
 
         {/* Render pin via PointAnnotation (view-based marker) */}
-        {/* Render pin via PointAnnotation */}
         {pin && (
           <MapLibreGL.PointAnnotation
             id="pin-annotation"
@@ -136,6 +123,18 @@ export default function MapScreen() {
           </MapLibreGL.ShapeSource>
         )}
       </MapLibreGL.MapView>
+      <View style={styles.osmAttribution} pointerEvents="none">
+        <Text
+          style={styles.osmAttributionText}
+          // make it tappable if you want (remove pointerEvents="none" above)
+          onPress={() =>
+            Linking.openURL("https://www.openstreetmap.org/copyright")
+          }
+          suppressHighlighting
+        >
+          © OpenStreetMap contributors
+        </Text>
+      </View>
       <View style={styles.overlay} pointerEvents="box-none">
         {/* Title bar */}
         <View style={styles.titleBar} pointerEvents="none">
@@ -164,7 +163,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
-
+  osmAttribution: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    backgroundColor: "#ffffffCC", // semi-transparent white
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#00000022",
+  },
+  osmAttributionText: {
+    fontSize: 10,
+    color: "#000000B3",
+  },
   // black title bar like the screenshot
   titleBar: {
     backgroundColor: "#0b0b0b",
