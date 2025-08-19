@@ -12,7 +12,7 @@ const BASIC_BG_STYLE = {
 } as const;
 
 export default function MapScreen() {
-  const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const cameraRef = useRef<MapLibreGL.CameraRef>(null);
   const [pin, setPin] = useState<[number, number] | null>(null);
 
   useEffect(() => {
@@ -64,15 +64,22 @@ export default function MapScreen() {
     <View style={styles.container}>
       <MapLibreGL.MapView
         style={styles.map}
-        styleJSON={BASIC_BG_STYLE}
+        // styleJSON={BASIC_BG_STYLE}
+        mapStyle={BASIC_BG_STYLE}
         logoEnabled={false}
         compassEnabled
         onLongPress={handleLongPress}
-        onMapError={(e) => console.warn("onMapError:", e.nativeEvent)}
-        onDidFailLoadingMap={(e) =>
-          console.warn("onDidFailLoadingMap:", e.nativeEvent)
-        }
-        onDidFinishLoadingStyle={() => console.log("Style loaded")}
+        // onMapError={(e) => console.warn("onMapError:", e.nativeEvent)}
+        // Add these props:
+        //maximumZoomLevel={18}
+        //minZoomLevel={5}
+        //reactionsEnabled={true}
+        zoomEnabled={true}
+        attributionEnabled={false}
+        //tileCountLimit={100}
+        // Tile download options
+        //tileCacheBudget={64} // in MB
+        //tileCacheMaxAge={7 * 24 * 3600 * 1000} // 7 days in milliseconds
       >
         <MapLibreGL.Camera
           ref={cameraRef}
@@ -86,7 +93,7 @@ export default function MapScreen() {
         <MapLibreGL.RasterSource
           id="gsi-pale"
           tileUrlTemplates={[
-            "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",
+            "	https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
           ]}
           tileSize={256}
         >
@@ -94,13 +101,23 @@ export default function MapScreen() {
         </MapLibreGL.RasterSource>
 
         {/* Render pin via PointAnnotation (view-based marker) */}
+        {/* Render pin via PointAnnotation */}
         {pin && (
           <MapLibreGL.PointAnnotation
             id="pin-annotation"
             coordinate={pin}
             onSelected={() => console.log("PointAnnotation selected at", pin)}
           >
-            <View style={styles.pin} />
+            <View
+              style={{
+                height: 20,
+                width: 20,
+                backgroundColor: "red",
+                borderRadius: 10,
+                borderColor: "white",
+                borderWidth: 2,
+              }}
+            />
           </MapLibreGL.PointAnnotation>
         )}
 
