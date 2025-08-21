@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 // サンプルデータ
 const bookings = [
@@ -10,7 +18,7 @@ const bookings = [
     gender: "男性のみ",
     date: "2025/08/20",
     place: "東京都渋谷区",
-    people: "10人"
+    people: "10人",
   },
   {
     id: 2,
@@ -19,14 +27,14 @@ const bookings = [
     gender: "制限なし",
     date: "2025/08/22",
     place: "大阪府大阪市",
-    people: "5人"
+    people: "5人",
   },
 ];
 
 export default function BookingsScreen() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const selectedBooking = bookings.find(b => b.id === selectedId);
+  const selectedBooking = bookings.find((b) => b.id === selectedId);
 
   return (
     <View style={styles.container}>
@@ -59,16 +67,29 @@ export default function BookingsScreen() {
         animationType="fade"
         onRequestClose={() => setSelectedId(null)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setSelectedId(null)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setSelectedId(null)}
+        >
           <View style={styles.modalContent}>
             {selectedBooking && (
               <>
                 <Text style={styles.modalTitle}>{selectedBooking.title}</Text>
-                <Text style={styles.modalItem}>年齢: {selectedBooking.age}</Text>
-                <Text style={styles.modalItem}>性別: {selectedBooking.gender}</Text>
-                <Text style={styles.modalItem}>日程: {selectedBooking.date}</Text>
-                <Text style={styles.modalItem}>場所: {selectedBooking.place}</Text>
-                <Text style={styles.modalItem}>人数: {selectedBooking.people}</Text>
+                <Text style={styles.modalItem}>
+                  年齢: {selectedBooking.age}
+                </Text>
+                <Text style={styles.modalItem}>
+                  性別: {selectedBooking.gender}
+                </Text>
+                <Text style={styles.modalItem}>
+                  日程: {selectedBooking.date}
+                </Text>
+                <Text style={styles.modalItem}>
+                  場所: {selectedBooking.place}
+                </Text>
+                <Text style={styles.modalItem}>
+                  人数: {selectedBooking.people}
+                </Text>
                 <Text style={styles.modalHint}>タップで詳細を閉じる</Text>
               </>
             )}
