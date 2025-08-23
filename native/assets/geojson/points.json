@@ -1,0 +1,37 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Tokyo" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [139.7671, 35.6812]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Osaka" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [135.4983, 34.6937]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Sapporo" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [141.3545, 43.0621]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Fukuoka" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [130.4181, 33.5904]
+      }
+    }
+  ]
+}
