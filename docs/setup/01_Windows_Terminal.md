@@ -1,0 +1,21 @@
+# [Windows] Windows ターミナル
+
+## Windows ターミナル をインストール
+
+[Microsoft Store](https://apps.microsoft.com/detail/9n0dx20hk701?hl=ja-JP&gl=JP) からインストールします。
+
+## PowerShell をアップデート
+
+Windows ターミナルでは、PowerShell を使用します。デフォルトでインストールされている PowerShell は最新版でないため、アップデートします。
+
+既存の PowerShell をアンインストールします。
+
+```pwsh
+winget uninstall PowerShell
+```
+
+新規 PowerShell をインストールします。
+
+```pwsh
+winget install --id Microsoft.Powershell --source winget
+```
