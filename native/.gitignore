@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# android
+android/*
+
 # Expo
 .expo/
 dist/
@@ -31,7 +34,8 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env*
+.local
 
 # typescript
 *.tsbuildinfo
