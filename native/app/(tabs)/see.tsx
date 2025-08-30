@@ -122,10 +122,12 @@ export default function App() {
       return;
     }
 
-    const clean: Pin[] = (data ?? [])
-      .map(rowToPin)
-      .filter((p): p is Pin => !!p);
-
+    const now = new Date();
+    const clean: Pin[] = (data ?? []).map(rowToPin).filter((p): p is Pin => {
+      if (!p) return false;
+      const isFuture = !p.end_at || new Date(p.end_at) > now;
+      return isFuture;
+    });
     setPins(clean);
     setLoadingPins(false);
     setLastSyncAt(new Date());
@@ -147,28 +149,31 @@ export default function App() {
           if (!row) return;
           const pin = rowToPin(row);
 
+          // ...inside the postgres_changes handler...
           setPins((prev) => {
+            const now = new Date();
+            let next: Pin[];
             const idx = prev.findIndex((p) => p.id === String(row.id));
 
             if (payload.eventType === "DELETE") {
               if (idx === -1) return prev;
-              const next = prev.slice();
+              next = prev.slice();
               next.splice(idx, 1);
-              return next;
+            } else {
+              // INSERT/UPDATE
+              if (!pin) {
+                if (idx === -1) return prev;
+                next = prev.slice();
+                next.splice(idx, 1);
+              } else if (idx === -1) {
+                next = [...prev, pin];
+              } else {
+                next = prev.slice();
+                next[idx] = { ...next[idx], ...pin };
+              }
             }
-
-            // INSERT/UPDATE
-            if (!pin) {
-              // 緯度経度が未設定になった場合は消す
-              if (idx === -1) return prev;
-              const next = prev.slice();
-              next.splice(idx, 1);
-              return next;
-            }
-            if (idx === -1) return [...prev, pin];
-            const next = prev.slice();
-            next[idx] = { ...next[idx], ...pin };
-            return next;
+            // ★ ここで未来のイベントだけに絞る
+            return next.filter((p) => !p.end_at || new Date(p.end_at) > now);
           });
 
           // モーダル表示中なら内容も同期
