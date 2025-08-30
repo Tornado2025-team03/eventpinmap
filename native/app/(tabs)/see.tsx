@@ -210,6 +210,15 @@ export default function App() {
   // ピン押下 → すぐモーダル
   const handleMarkerPress = useCallback((pin: Pin) => {
     setSelectedEvent(pin);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: pin.latitude,
+        longitude: pin.longitude,
+        latitudeDelta: 0.1, // smaller value = more zoom
+        longitudeDelta: 0.1,
+      },
+      500, // duration in ms
+    );
   }, []);
 
   // 追従ON/OFF
