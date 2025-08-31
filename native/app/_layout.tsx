@@ -29,11 +29,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="profile" options={{ title: "プロフィール" }} />
           <Stack.Screen name="account" options={{ title: "アカウント情報" }} />
-          <Stack.Screen
-            name="userManagement"
-            options={{ title: "ユーザー管理" }}
-          />
           <Stack.Screen name="notice" options={{ title: "お知らせ" }} />
+          <Stack.Screen name="help" options={{ title: "ヘルプセンター" }} />
           <Stack.Screen name="terms" options={{ title: "利用規約" }} />
           <Stack.Screen name="version" options={{ title: "バージョン情報" }} />
           <Stack.Screen name="+not-found" />

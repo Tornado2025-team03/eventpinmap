@@ -1,22 +1,19 @@
 import { useNavigation } from "@react-navigation/native";
-import React, { useLayoutEffect, useState } from "react";
+import React, { useLayoutEffect } from "react";
 import {
   Alert,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
 export default function AccountScreen() {
   const navigation = useNavigation();
-  const [email, setEmail] = useState("user@example.com"); // 仮の初期値
-  const [phone, setPhone] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // 仮データ: DBから取得予定
+  const email = "user@example.com";
+  const registeredDate = "2025年8月1日";
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerBackTitle: "設定" });
@@ -29,7 +26,7 @@ export default function AccountScreen() {
       [
         { text: "キャンセル", style: "cancel" },
         {
-          text: "削除する",
+          text: "削除",
           style: "destructive",
           onPress: () => {
             /* 削除処理 */
@@ -41,46 +38,31 @@ export default function AccountScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.label}>メールアドレス</Text>
-      <View style={styles.row}>
-        <Text style={styles.emailText}>{email}</Text>
-        <TouchableOpacity style={styles.changeButton}>
-          <Text style={styles.changeButtonText}>変更</Text>
-        </TouchableOpacity>
+      {/* 連携中のアカウント */}
+      <Text style={styles.sectionTitle}>連携中のアカウント</Text>
+      <View style={styles.accountRow}>
+        {/* Googleアイコン */}
+        <View style={styles.googleIconContainer}>
+          <Text style={styles.googleIcon}>G</Text>
+        </View>
+        <View style={styles.accountInfoContainer}>
+          <View style={styles.infoItem}>
+            <Text style={styles.accountLabel}>メールアドレス</Text>
+            <Text style={styles.accountValue}>{email}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.accountLabel}>パスワード</Text>
+            <Text style={styles.accountValue}>
+              Googleアカウントで管理・変更されています
+            </Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.accountLabel}>初回登録日</Text>
+            <Text style={styles.accountValue}>{registeredDate}</Text>
+          </View>
+        </View>
       </View>
-
-      <Text style={styles.label}>パスワードの変更</Text>
-      <TextInput
-        style={styles.input}
-        value={currentPassword}
-        onChangeText={setCurrentPassword}
-        placeholder="現在のパスワード"
-        secureTextEntry
-      />
-      <TextInput
-        style={styles.input}
-        value={newPassword}
-        onChangeText={setNewPassword}
-        placeholder="新しいパスワード"
-        secureTextEntry
-      />
-      <TextInput
-        style={styles.input}
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        placeholder="新しいパスワード（確認用）"
-        secureTextEntry
-      />
-
-      <Text style={styles.label}>電話番号（任意）</Text>
-      <TextInput
-        style={styles.input}
-        value={phone}
-        onChangeText={setPhone}
-        placeholder="電話番号を入力"
-        keyboardType="phone-pad"
-      />
-
+      <View style={styles.divider} />
       <TouchableOpacity
         style={styles.deleteButton}
         onPress={handleDeleteAccount}
@@ -92,6 +74,60 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 8,
+    marginTop: 4,
+    color: "#222",
+  },
+  accountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  googleIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#eee",
+    marginRight: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  googleIcon: {
+    fontSize: 28,
+    color: "#4285F4",
+    fontWeight: "bold",
+  },
+  accountInfoContainer: {
+    flex: 1,
+  },
+  accountLabel: {
+    fontSize: 14,
+    color: "#888",
+    marginTop: 4,
+  },
+  accountValue: {
+    fontSize: 15,
+    color: "#222",
+    marginBottom: 2,
+  },
+  infoItem: {
+    marginBottom: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#eee",
+    marginVertical: 16,
+  },
   container: {
     padding: 24,
     backgroundColor: "#fff",

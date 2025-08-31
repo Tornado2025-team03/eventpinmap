@@ -24,7 +24,7 @@ export default function TermsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.label}>利用規約</Text>
+      <Text style={styles.sectionTitle}>利用規約</Text>
       <Text style={styles.termsText}>{TERMS_TEXT}</Text>
 
       <TouchableOpacity style={styles.privacyLink} onPress={handlePrivacyPress}>
@@ -40,15 +40,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     minHeight: "100%",
   },
-  label: {
-    fontSize: 15,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 6,
-    marginTop: 18,
+    marginBottom: 8,
+    marginTop: 4,
     color: "#222",
   },
+  divider: {
+    height: 1,
+    backgroundColor: "#eee",
+    marginVertical: 16,
+  },
   termsText: {
-    fontSize: 14,
+    fontSize: 15,
     color: "#222",
     lineHeight: 22,
     marginBottom: 24,
