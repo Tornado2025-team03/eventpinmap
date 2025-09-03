@@ -11,12 +11,7 @@ import {
   Linking,
   TouchableWithoutFeedback,
 } from "react-native";
-import MapView, {
-  Marker,
-  PROVIDER_GOOGLE,
-  Region,
-  MapType,
-} from "react-native-maps";
+import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
 
@@ -47,11 +42,8 @@ export default function App() {
   // 現在地・リージョン
   const [region, setRegion] = useState<Region | null>(null);
   const [myCoord, setMyCoord] = useState<LatLng | null>(null);
-  const [watching, setWatching] = useState(false);
-  const watchRef = useRef<Location.LocationSubscription | null>(null);
 
-  // マップ表示用
-  const [mapType, setMapType] = useState<MapType>("standard");
+  const watchRef = useRef<Location.LocationSubscription | null>(null);
 
   // イベント（ピン）
   const [pins, setPins] = useState<Pin[]>([]);
@@ -221,38 +213,6 @@ export default function App() {
     );
   }, []);
 
-  // 追従ON/OFF
-  const toggleWatch = useCallback(async () => {
-    if (watchRef.current) {
-      watchRef.current.remove();
-      watchRef.current = null;
-      setWatching(false);
-      return;
-    }
-    const sub = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 2000,
-        distanceInterval: 5,
-      },
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const next = { latitude, longitude };
-        setMyCoord(next);
-        mapRef.current?.animateToRegion(
-          {
-            ...next,
-            latitudeDelta: region?.latitudeDelta ?? 0.02,
-            longitudeDelta: region?.longitudeDelta ?? 0.02,
-          },
-          400,
-        );
-      },
-    );
-    watchRef.current = sub;
-    setWatching(true);
-  }, [region]);
-
   // 現在地へリセンタ
   const recenter = useCallback(() => {
     if (!myCoord) return;
@@ -295,7 +255,6 @@ export default function App() {
         showsCompass
         showsScale={Platform.OS === "ios"}
         onRegionChangeComplete={(r) => setRegion(r)}
-        mapType={mapType}
       >
         {/* バブルを出さないため、title/descriptionは渡さない */}
         {!loadingPins &&
@@ -305,6 +264,7 @@ export default function App() {
               coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
               pinColor="tomato"
               onPress={() => handleMarkerPress(pin)}
+              // image={require("../../assets/images/pin.png")}
             />
           ))}
       </MapView>
@@ -312,15 +272,7 @@ export default function App() {
       {/* 右上のツール群 */}
       <View style={{ position: "absolute", top: 16, right: 16, gap: 8 }}>
         <RoundBtn label="Refresh" onPress={() => void loadEvents()} />
-        <RoundBtn
-          label={watching ? "追従ON" : "追従OFF"}
-          onPress={toggleWatch}
-        />
         <RoundBtn label="中心へ" onPress={recenter} />
-        <RoundBtn
-          label={mapTypeLabel(mapType)}
-          onPress={() => setMapType(nextMapType(mapType))}
-        />
       </View>
 
       {/* 左下：同期時刻 */}
@@ -400,16 +352,33 @@ export default function App() {
                   </Text>
                 ) : null}
 
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-                  {selectedEvent ? (
-                    <ActionBtn
-                      label="Directions"
-                      onPress={() => openDirections(selectedEvent)}
-                    />
-                  ) : null}
+                <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
                   <ActionBtn
-                    label="Close"
-                    onPress={() => setSelectedEvent(null)}
+                    label="Directions"
+                    onPress={() => {
+                      if (selectedEvent) {
+                        openDirections(selectedEvent);
+                      }
+                      return;
+                    }}
+                  />
+                  <ActionBtn
+                    label="participate"
+                    onPress={async () => {
+                      Alert.alert(
+                        "参加確認",
+                        "本当にこのイベントに参加しますか？",
+                        [
+                          { text: "キャンセル", style: "cancel" },
+                          {
+                            text: "参加する",
+                            onPress: async () => {
+                              await handleParticipate(selectedEvent);
+                            },
+                          },
+                        ],
+                      );
+                    }}
                   />
                 </View>
 
@@ -478,33 +447,6 @@ function RoundBtn({
   );
 }
 
-// マップタイプ切替（Expo Goで動く範囲）
-function nextMapType(t: MapType): MapType {
-  const order: MapType[] = Platform.select({
-    ios: ["standard", "satellite", "hybrid", "mutedStandard"] as MapType[],
-    android: ["standard", "satellite", "terrain", "hybrid"] as MapType[],
-    default: ["standard", "satellite", "hybrid"] as MapType[],
-  })!;
-  const i = order.indexOf(t);
-  return order[(i + 1) % order.length];
-}
-function mapTypeLabel(t: MapType) {
-  switch (t) {
-    case "standard":
-      return "標準";
-    case "satellite":
-      return "航空写真";
-    case "hybrid":
-      return "ハイブリッド";
-    case "terrain":
-      return "地形";
-    case "mutedStandard":
-      return "淡色";
-    default:
-      return String(t);
-  }
-}
-
 // ISO → 表示用
 function formatRange(start?: string | null, end?: string | null) {
   const s = start ? new Date(start) : null;
@@ -518,4 +460,44 @@ function formatRange(start?: string | null, end?: string | null) {
     : "";
   const ee = e ? `${pad(e.getHours())}:${pad(e.getMinutes())}` : "";
   return e ? `${ss} - ${ee}` : ss;
+}
+
+async function handleParticipate(event: Pin | null) {
+  if (!event) return;
+  const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+  const userId = user?.data?.user?.id;
+  if (!userId) {
+    Alert.alert("ログインしてください");
+    return;
+  }
+
+  // Check if already participating
+  const { data: existing, error: selectError } = await supabase
+    .from("event_members")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("event_id", event.id)
+    .single();
+
+  if (selectError && selectError.code !== "PGRST116") {
+    Alert.alert("確認エラー", selectError.message);
+    return;
+  }
+  if (existing) {
+    Alert.alert("既に参加しています");
+    return;
+  }
+
+  // Add as participant
+  const { error: insertError } = await supabase.from("event_members").insert({
+    user_id: userId,
+    event_id: event.id,
+    role: "participant",
+  });
+
+  if (insertError) {
+    Alert.alert("参加エラー", insertError.message);
+    return;
+  }
+  Alert.alert("参加しました！");
 }
