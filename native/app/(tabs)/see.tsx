@@ -1,5 +1,11 @@
 // App.tsx
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -14,6 +20,7 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
+import { useLocalSearchParams } from "expo-router";
 
 type LatLng = { latitude: number; longitude: number };
 type EventRow = {
