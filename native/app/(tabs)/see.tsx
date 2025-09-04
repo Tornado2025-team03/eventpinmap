@@ -1,5 +1,11 @@
 // App.tsx
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -14,6 +20,7 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
+import { useLocalSearchParams } from "expo-router";
 
 type LatLng = { latitude: number; longitude: number };
 type EventRow = {
@@ -38,6 +45,17 @@ type Pin = LatLng & {
 
 export default function App() {
   const mapRef = useRef<MapView>(null);
+  const { lat: latParam, lng: lngParam } = useLocalSearchParams<{
+    lat?: string;
+    lng?: string;
+  }>();
+
+  const targetCoord = useMemo(() => {
+    const la = latParam ? parseFloat(String(latParam)) : NaN;
+    const lo = lngParam ? parseFloat(String(lngParam)) : NaN;
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
+    return { latitude: la, longitude: lo } as LatLng;
+  }, [latParam, lngParam]);
 
   // 現在地・リージョン
   const [region, setRegion] = useState<Region | null>(null);
@@ -96,7 +114,7 @@ export default function App() {
       watchRef.current?.remove();
       watchRef.current = null;
     };
-  }, []);
+  }, [targetCoord]);
 
   // 初回フェッチ
   const loadEvents = useCallback(async () => {

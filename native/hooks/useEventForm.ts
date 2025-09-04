@@ -1,7 +1,9 @@
 import React from "react";
 import { Alert, Platform } from "react-native";
 import { supabase } from "../lib/supabase";
-import { insertEvent, insertEventTags } from "../services/events";
+import { useRouter } from "expo-router";
+import { insertEvent, insertEventTagIds } from "../services/events";
+import { fetchTagOptionsByNames } from "../services/tagOptions";
 import { geocodeAddress, reverseGeocode } from "../services/geocode";
 import type { Rule, Step, TargetField } from "../types/event";
 
@@ -37,21 +39,12 @@ function mergeDateOrTime(
   return merged;
 }
 
-function buildDescription(params: {
-  tags: string[];
-  capacity: string;
-  fee: string;
-  description: string;
-}) {
-  const parts: string[] = [];
-  if (params.description) parts.push(params.description);
-  if (params.tags.length) parts.push("タグ: " + params.tags.join(", "));
-  if (params.capacity) parts.push("募集人数: " + params.capacity);
-  if (params.fee) parts.push("参加費: " + params.fee);
-  return parts.join("\n");
+function buildDescription(params: { description: string }) {
+  return params.description || "";
 }
 
 export function useEventForm() {
+  const router = useRouter();
   // global
   const [step, setStep] = React.useState<Step>(1);
   const [userId, setUserId] = React.useState<string | null>(null);
@@ -76,7 +69,7 @@ export function useEventForm() {
   // Step 2
   const [tags, setTags] = React.useState<string[]>([]);
   const [capacity, setCapacity] = React.useState("");
-  const [fee, setFee] = React.useState("0");
+  const [fee, setFee] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [addDetailsOpen, setAddDetailsOpen] = React.useState(true);
 
@@ -177,7 +170,7 @@ export function useEventForm() {
     const name = title || suggestedTitle || "無題のイベント";
     const payload = {
       name,
-      description: buildDescription({ tags, capacity, fee, description }),
+      description: buildDescription({ description }),
       location: where,
       start_at: when.toISOString(),
       end_at: endAt ? endAt.toISOString() : null,
@@ -191,18 +184,48 @@ export function useEventForm() {
       setPublishing(true);
       const created = await insertEvent(payload);
 
-      // event_tags へタグを保存（存在すれば）
+      // event_tags へタグを保存: tag_options から name -> id を解決
       try {
-        const id = (created as any)?.id;
-        if (id && tags.length > 0) {
-          await insertEventTags(id, tags);
+        const eventId = (created as any)?.id;
+        if (eventId) {
+          const names: string[] = [];
+          if (tags.length) names.push(...tags);
+          if (capacity) names.push(capacity);
+          if (fee) names.push(fee);
+
+          const map = await fetchTagOptionsByNames(names);
+          const tagIds = names
+            .map((n) => map.get(n)?.id)
+            .filter((v): v is string => typeof v === "string");
+
+          if (tagIds.length) {
+            await insertEventTagIds(eventId, tagIds);
+          } else if (names.length > 0) {
+            console.warn("No tag ids resolved from tag_options for:", names);
+            Alert.alert(
+              "タグ未登録",
+              "選択したタグに対応するマスタが見つからず、タグは保存されませんでした。",
+            );
+          }
         }
       } catch (tagErr) {
         console.warn("tag insert error:", tagErr);
         // タグ失敗は致命的ではないため継続
       }
 
-      Alert.alert("成功", "イベントを作成しました！");
+      const lat = latitude ?? undefined;
+      const lng = longitude ?? undefined;
+      Alert.alert("成功", "イベントを作成しました！", [
+        {
+          text: "OK",
+          onPress: () => {
+            const params: Record<string, string> = {};
+            if (typeof lat === "number") params.lat = String(lat);
+            if (typeof lng === "number") params.lng = String(lng);
+            router.replace({ pathname: "/(tabs)/see", params });
+          },
+        },
+      ]);
     } catch (error: any) {
       console.log("insert error:", error);
       Alert.alert("投稿に失敗しました", error?.message ?? "不明なエラー");
