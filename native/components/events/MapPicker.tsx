@@ -6,6 +6,7 @@ import MapView, {
   PROVIDER_GOOGLE,
   LongPressEvent,
 } from "react-native-maps";
+// No in-map search; selection is via long-press only
 
 type Props = {
   initialRegion?: Region;
@@ -23,6 +24,7 @@ export function MapPicker({
   height = 260,
 }: Props) {
   const [coord, setCoord] = React.useState(value ?? null);
+  // in-map search removed; rely on long-press
 
   const onLongPress = (e: LongPressEvent) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;

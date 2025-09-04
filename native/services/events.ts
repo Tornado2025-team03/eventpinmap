@@ -27,3 +27,23 @@ export async function insertEventTags(
   if (error) throw error;
   return { count: count ?? rows.length } as const;
 }
+
+export async function insertEventTagIds(
+  eventId: string | number,
+  tagIds: string[],
+) {
+  const unique = Array.from(new Set(tagIds.filter(Boolean)));
+  if (unique.length === 0) return { count: 0 } as const;
+
+  const now = new Date().toISOString();
+  const rows = unique.map((id) => ({
+    event_id: eventId,
+    tag_id: id,
+    created_at: now,
+  }));
+  const { error, count } = await supabase
+    .from("event_tags")
+    .insert(rows, { count: "exact" });
+  if (error) throw error;
+  return { count: count ?? rows.length } as const;
+}

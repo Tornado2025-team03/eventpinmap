@@ -6,10 +6,12 @@ import {
   Button,
   TouchableOpacity,
   Platform,
+  Alert,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { chip } from "./styles";
 import { MapPicker } from "./MapPicker";
+import { geocodeAddress } from "../../services/geocode";
 
 export function Step1(props: {
   title: string;
@@ -25,6 +27,8 @@ export function Step1(props: {
   setWhere: (s: string) => void;
   latitude: number | null;
   longitude: number | null;
+  setLatitude: (n: number | null) => void;
+  setLongitude: (n: number | null) => void;
   geocodeCurrentAddress: () => Promise<void>;
   setCoordinatesAndReverseGeocode: (lat: number, lng: number) => Promise<void>;
   showPicker: boolean;
@@ -50,6 +54,8 @@ export function Step1(props: {
     setWhere,
     latitude,
     longitude,
+    setLatitude,
+    setLongitude,
     geocodeCurrentAddress,
     setCoordinatesAndReverseGeocode,
     showPicker,
@@ -63,6 +69,7 @@ export function Step1(props: {
   } = props;
 
   const [showMap, setShowMap] = React.useState(false);
+  const [searching, setSearching] = React.useState(false);
 
   return (
     <View>
@@ -187,24 +194,67 @@ export function Step1(props: {
       <Text style={{ fontWeight: "600", marginTop: 16, marginBottom: 8 }}>
         どこでやる？
       </Text>
-      <TextInput
-        style={{
-          height: 48,
-          borderColor: "#ccc",
-          borderWidth: 1,
-          borderRadius: 12,
-          paddingHorizontal: 12,
-        }}
-        placeholder="例：渋谷駅周辺 / ○○公園 など"
-        value={where}
-        onChangeText={setWhere}
-      />
-
-      {/* 住所→座標化、地図で選択 */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
-        <TouchableOpacity onPress={geocodeCurrentAddress} style={chip}>
-          <Text>住所から検索</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <TextInput
+          style={{
+            flex: 1,
+            height: 48,
+            borderColor: "#ccc",
+            borderWidth: 1,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+          }}
+          placeholder="例：渋谷駅周辺 / ○○公園 など"
+          value={where}
+          onChangeText={setWhere}
+        />
+        <TouchableOpacity
+          onPress={async () => {
+            const q = (where ?? "").trim();
+            if (q.length < 2) {
+              Alert.alert(
+                "検索ワードが短いです",
+                "2文字以上を入力してください。",
+              );
+              return;
+            }
+            setSearching(true);
+            try {
+              const r = await geocodeAddress(q);
+              if (r) {
+                setLatitude(r.latitude);
+                setLongitude(r.longitude);
+                setShowMap(true);
+              } else {
+                Alert.alert(
+                  "見つかりません",
+                  "該当する場所が見つかりませんでした。",
+                );
+              }
+            } catch (e) {
+              Alert.alert("エラー", "検索中にエラーが発生しました。");
+            } finally {
+              setSearching(false);
+            }
+          }}
+          disabled={searching}
+          style={{
+            height: 48,
+            paddingHorizontal: 12,
+            backgroundColor: searching ? "#ccc" : "#007aff",
+            borderRadius: 12,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "600" }}>
+            {searching ? "検索中" : "検索"}
+          </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* 地図で選択 */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
         <TouchableOpacity onPress={() => setShowMap((s) => !s)} style={chip}>
           <Text>{showMap ? "地図を閉じる" : "地図で選ぶ"}</Text>
         </TouchableOpacity>
@@ -224,7 +274,9 @@ export function Step1(props: {
           }
           onConfirm={(lat, lng) => {
             setShowMap(false);
-            setCoordinatesAndReverseGeocode(lat, lng);
+            // ユーザが入力した住所は変更しない
+            setLatitude(lat);
+            setLongitude(lng);
           }}
           onCancel={() => setShowMap(false)}
         />
