@@ -1,4 +1,3 @@
-// App.tsx
 import React, {
   useCallback,
   useEffect,
@@ -23,6 +22,7 @@ import { supabase } from "../../lib/supabase";
 import { useLocalSearchParams } from "expo-router";
 
 type LatLng = { latitude: number; longitude: number };
+type Tag = { id: string; name: string };
 type EventRow = {
   id: string;
   name: string;
@@ -33,6 +33,7 @@ type EventRow = {
   start_at?: string | null;
   end_at?: string | null;
   updated_at?: string | null;
+  event_tags?: { tag?: Tag }[];
 };
 type Pin = LatLng & {
   id: string;
@@ -41,6 +42,7 @@ type Pin = LatLng & {
   location?: string;
   start_at?: string | null;
   end_at?: string | null;
+  tags?: Tag[];
 };
 
 export default function App() {
@@ -60,14 +62,29 @@ export default function App() {
   // 現在地・リージョン
   const [region, setRegion] = useState<Region | null>(null);
   const [myCoord, setMyCoord] = useState<LatLng | null>(null);
-
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const watchRef = useRef<Location.LocationSubscription | null>(null);
-
+  const [tagModalVisible, setTagModalVisible] = useState(false);
   // イベント（ピン）
   const [pins, setPins] = useState<Pin[]>([]);
   const [loadingPins, setLoadingPins] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+  const allTags = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          pins.flatMap((p) => p.tags ?? []).map((tag) => [tag.id, tag]),
+        ).values(),
+      ),
+    [pins],
+  );
 
+  const filteredPins = useMemo(() => {
+    if (!selectedTags.length) return pins;
+    return pins.filter((p) =>
+      p.tags?.some((t) => selectedTags.some((sel) => sel.id === t.id)),
+    );
+  }, [pins, selectedTags]);
   // モーダルの対象
   const [selectedEvent, setSelectedEvent] = useState<Pin | null>(null);
 
@@ -85,6 +102,7 @@ export default function App() {
       end_at: r.end_at ?? null,
       latitude: lat,
       longitude: lng,
+      tags: (r.event_tags?.map((et) => et.tag).filter(Boolean) as Tag[]) ?? [],
     };
   }, []);
 
@@ -122,7 +140,14 @@ export default function App() {
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, name, description, location, latitude, longitude, start_at, end_at, updated_at",
+        `
+        id, name, description, location, latitude, longitude, start_at, end_at, updated_at,
+        event_tags (
+          tag:tags (
+            id, name
+          )
+        )
+      `,
       )
       .order("start_at", { ascending: true });
 
@@ -133,7 +158,17 @@ export default function App() {
     }
 
     const now = new Date();
-    const clean: Pin[] = (data ?? []).map(rowToPin).filter((p): p is Pin => {
+    // Fix event_tags structure to match EventRow type
+    const normalizedData = (data ?? []).map((row: any) => {
+      // event_tags may be [{ tag: [{ id, name }, ...] }] instead of [{ tag: { id, name } }]
+      if (Array.isArray(row.event_tags)) {
+        row.event_tags = row.event_tags.flatMap((et: any) =>
+          Array.isArray(et.tag) ? et.tag.map((tag: any) => ({ tag })) : [et],
+        );
+      }
+      return row;
+    });
+    const clean: Pin[] = normalizedData.map(rowToPin).filter((p): p is Pin => {
       if (!p) return false;
       const isFuture = !p.end_at || new Date(p.end_at) > now;
       return isFuture;
@@ -159,7 +194,6 @@ export default function App() {
           if (!row) return;
           const pin = rowToPin(row);
 
-          // ...inside the postgres_changes handler...
           setPins((prev) => {
             const now = new Date();
             let next: Pin[];
@@ -186,7 +220,6 @@ export default function App() {
             return next.filter((p) => !p.end_at || new Date(p.end_at) > now);
           });
 
-          // モーダル表示中なら内容も同期
           setSelectedEvent((prev) =>
             prev && prev.id === String(row.id) && pin
               ? { ...prev, ...pin }
@@ -224,10 +257,10 @@ export default function App() {
       {
         latitude: pin.latitude,
         longitude: pin.longitude,
-        latitudeDelta: 0.1, // smaller value = more zoom
+        latitudeDelta: 0.1,
         longitudeDelta: 0.1,
       },
-      500, // duration in ms
+      500,
     );
   }, []);
 
@@ -263,6 +296,7 @@ export default function App() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Map */}
       <MapView
         ref={mapRef}
         style={{ flex: 1 }}
@@ -274,23 +308,55 @@ export default function App() {
         showsScale={Platform.OS === "ios"}
         onRegionChangeComplete={(r) => setRegion(r)}
       >
-        {/* バブルを出さないため、title/descriptionは渡さない */}
         {!loadingPins &&
-          pins.map((pin) => (
-            <Marker
-              key={pin.id}
-              coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-              pinColor="tomato"
-              onPress={() => handleMarkerPress(pin)}
-              // image={require("../../assets/images/pin.png")}
-            />
-          ))}
+          pins.map((pin) => {
+            const isHighlighted =
+              selectedTags.length > 0 &&
+              pin.tags?.some((t) =>
+                selectedTags.some((sel) => sel.id === t.id),
+              );
+            return (
+              <Marker
+                key={`${pin.id}-${selectedTags.map((t) => t.id).join(",") || "all"}`}
+                coordinate={{
+                  latitude: pin.latitude,
+                  longitude: pin.longitude,
+                }}
+                pinColor={isHighlighted ? "#FFD700" : "tomato"}
+                onPress={() => handleMarkerPress(pin)}
+              />
+            );
+          })}
       </MapView>
 
       {/* 右上のツール群 */}
-      <View style={{ position: "absolute", top: 16, right: 16, gap: 8 }}>
+      <View
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
         <RoundBtn label="Refresh" onPress={() => void loadEvents()} />
         <RoundBtn label="中心へ" onPress={recenter} />
+        <TouchableOpacity
+          onPress={() => setTagModalVisible(true)}
+          style={{
+            backgroundColor: "#0A84FF",
+            borderRadius: 32,
+            padding: 16,
+            marginTop: 8,
+            elevation: 4,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 4,
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 24 }}>🔍</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 左下：同期時刻 */}
@@ -311,6 +377,35 @@ export default function App() {
             : "Syncing…"}
         </Text>
       </View>
+
+      {/* Bottom Center Tab Icon */}
+      {/* <View
+        style={{
+          position: "absolute",
+          bottom: 24,
+          left: 0,
+          right: 0,
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => setTagModalVisible(true)}
+          style={{
+            backgroundColor: "#0A84FF",
+            borderRadius: 32,
+            padding: 16,
+            elevation: 4,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 4,
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 24 }}>🏷️</Text>
+        </TouchableOpacity>
+      </View> */}
 
       {/* 詳細モーダル（ピン押下で即表示） */}
       <Modal
@@ -350,6 +445,33 @@ export default function App() {
                 <Text style={{ fontSize: 18, fontWeight: "700" }}>
                   {selectedEvent?.title ?? "Event"}
                 </Text>
+                {selectedEvent?.tags && selectedEvent.tags.length > 0 ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      marginTop: 8,
+                    }}
+                  >
+                    {selectedEvent.tags.map((tag) => (
+                      <View
+                        key={tag.id}
+                        style={{
+                          backgroundColor: "#eee",
+                          borderRadius: 8,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          marginRight: 6,
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, color: "#555" }}>
+                          #{tag.name}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
 
                 {selectedEvent?.location ? (
                   <Text style={{ color: "#666", marginTop: 4 }}>
@@ -401,6 +523,111 @@ export default function App() {
                 </View>
 
                 <View style={{ height: 12 }} />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Tag Selection Modal */}
+      <Modal
+        visible={tagModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setTagModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setTagModalVisible(false)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.35)",
+              justifyContent: "flex-end",
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: "white",
+                  padding: 16,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  minHeight: 200,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}
+                >
+                  タグで絞り込み
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedTags([]);
+                      setTagModalVisible(false);
+                    }}
+                    style={{
+                      backgroundColor:
+                        selectedTags.length === 0 ? "#0A84FF" : "#eee",
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      marginRight: 6,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: selectedTags.length === 0 ? "white" : "#555",
+                      }}
+                    >
+                      すべて
+                    </Text>
+                  </TouchableOpacity>
+                  {allTags.map((tag) => {
+                    const isSelected = selectedTags.some(
+                      (t) => t.id === tag.id,
+                    );
+                    return (
+                      <TouchableOpacity
+                        key={tag.id}
+                        onPress={() => {
+                          setSelectedTags((prev) =>
+                            isSelected
+                              ? prev.filter((t) => t.id !== tag.id)
+                              : [...prev, tag],
+                          );
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? "#0A84FF" : "#eee",
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          marginRight: 6,
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? "white" : "#555" }}>
+                          #{tag.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={{ alignItems: "flex-end", marginTop: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setTagModalVisible(false)}
+                    style={{
+                      backgroundColor: "#0A84FF",
+                      borderRadius: 8,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontWeight: "700" }}>
+                      閉じる
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </TouchableWithoutFeedback>
           </View>
