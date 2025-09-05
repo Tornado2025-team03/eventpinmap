@@ -10,12 +10,9 @@ export default function TabLayout() {
       <Tabs.Screen name="see" options={{ title: "見る", headerShown: false }} />
       <Tabs.Screen
         name="connect"
-        options={{ title: "繋がる", headerShown: false }}
+        options={{ title: "繋がる", headerShown: true }}
       />
-      <Tabs.Screen
-        name="plan"
-        options={{ title: "企画", headerShown: false }}
-      />
+      <Tabs.Screen name="plan" options={{ title: "企画", headerShown: true }} />
       <Tabs.Screen
         name="bookings"
         options={{ title: "予約一覧", headerShown: true }}
