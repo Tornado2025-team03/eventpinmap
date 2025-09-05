@@ -127,7 +127,7 @@ export default function App() {
         latitude: coord.latitude,
         longitude: coord.longitude,
         start_at: startAt.toISOString(),
-        expires_at: endAt ? endAt.toISOString() : null,
+        end_at: endAt ? endAt.toISOString() : null,
       },
       { onConflict: "user_id" },
     );
@@ -154,7 +154,7 @@ export default function App() {
         latitude: null,
         longitude: null,
         start_at: new Date().toISOString(),
-        expires_at: null,
+        end_at: null,
       },
       { onConflict: "user_id" },
     );
