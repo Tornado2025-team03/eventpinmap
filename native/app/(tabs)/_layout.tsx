@@ -18,7 +18,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="bookings"
-        options={{ title: "予約一覧", headerShown: false }}
+        options={{ title: "予約一覧", headerShown: true }}
       />
       <Tabs.Screen
         name="settings"
