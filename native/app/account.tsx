@@ -1,6 +1,7 @@
-import { useNavigation } from "@react-navigation/native";
-import React, { useLayoutEffect } from "react";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useLayoutEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -8,16 +9,59 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../lib/supabase"; // Supabaseクライアントをインポート
+
+// アカウント情報の型を定義
+type AccountInfo = {
+  email: string | undefined;
+  registeredDate: string;
+};
 
 export default function AccountScreen() {
   const navigation = useNavigation();
-  // 仮データ: DBから取得予定
-  const email = "user@example.com";
-  const registeredDate = "2025年8月1日";
+  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerBackTitle: "設定" });
   }, [navigation]);
+
+  // 画面が表示されるたびに最新のアカウント情報を取得
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchAccountInfo = async () => {
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) throw new Error("ユーザー情報が取得できませんでした。");
+
+          // 取得した日付をフォーマット
+          const formattedDate = new Date(user.created_at).toLocaleDateString(
+            "ja-JP",
+            {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            },
+          );
+
+          setAccountInfo({
+            email: user.email,
+            registeredDate: formattedDate,
+          });
+        } catch (error) {
+          if (error instanceof Error) {
+            Alert.alert("エラー", error.message);
+          }
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchAccountInfo();
+    }, []),
+  );
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -28,13 +72,38 @@ export default function AccountScreen() {
         {
           text: "削除",
           style: "destructive",
-          onPress: () => {
-            /* 削除処理 */
+          onPress: async () => {
+            try {
+              // Supabaseのユーザー削除APIを呼び出し
+              const { error } = await supabase.rpc("delete_user");
+              if (error) throw error;
+              // サインアウトしてauth画面に遷移
+              await supabase.auth.signOut();
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "auth" as never }],
+              });
+            } catch (error) {
+              if (error instanceof Error) {
+                Alert.alert("削除エラー", error.message);
+              } else {
+                Alert.alert("削除エラー", "アカウント削除に失敗しました。");
+              }
+            }
           },
         },
       ],
     );
   };
+
+  // ローディング中はスピナーを表示
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -48,7 +117,7 @@ export default function AccountScreen() {
         <View style={styles.accountInfoContainer}>
           <View style={styles.infoItem}>
             <Text style={styles.accountLabel}>メールアドレス</Text>
-            <Text style={styles.accountValue}>{email}</Text>
+            <Text style={styles.accountValue}>{accountInfo?.email}</Text>
           </View>
           <View style={styles.infoItem}>
             <Text style={styles.accountLabel}>パスワード</Text>
@@ -58,7 +127,9 @@ export default function AccountScreen() {
           </View>
           <View style={styles.infoItem}>
             <Text style={styles.accountLabel}>初回登録日</Text>
-            <Text style={styles.accountValue}>{registeredDate}</Text>
+            <Text style={styles.accountValue}>
+              {accountInfo?.registeredDate}
+            </Text>
           </View>
         </View>
       </View>
@@ -74,6 +145,11 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
