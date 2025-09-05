@@ -1,28 +1,103 @@
-import { useNavigation } from "@react-navigation/native";
-import { Bell, FileText, HelpCircle, UserRound } from "lucide-react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import {
+  Bell,
+  ChevronRight,
+  FileText,
+  HelpCircle,
+  UserRound,
+} from "lucide-react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../../lib/supabase"; // Supabaseクライアントをインポート
 
-const settingsItems = [
-  { label: "プロフィール", screen: "profile" },
-  { label: "アカウント情報", screen: "account" },
-  { label: "お知らせ", screen: "notice" },
-  { label: "ヘルプセンター", screen: "help" },
-  { label: "利用規約", screen: "terms" },
-  { label: "ログアウト", screen: "logout" },
-];
+// プロフィールデータの型を定義
+type Profile = {
+  nickname: string | null;
+  profile_image_url: string | null;
+  email?: string;
+};
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
-  // 仮データ: DBから取得する予定
-  const nickname = "山田太郎";
-  const email = "user@example.com";
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 画面が表示されるたびに最新のプロフィール情報を取得
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchProfile = async () => {
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) throw new Error("ユーザーが見つかりません");
+
+          const { data, error } = await supabase
+            .from("user_profiles")
+            .select("nickname, profile_image_url")
+            .eq("id", user.id)
+            .single();
+
+          if (error && error.code !== "PGRST116") {
+            throw error;
+          }
+
+          setProfile({
+            nickname: data?.nickname || null,
+            profile_image_url: data?.profile_image_url || null,
+            email: user.email,
+          });
+        } catch (error) {
+          if (error instanceof Error) {
+            Alert.alert(
+              "エラー",
+              "プロフィールの取得に失敗しました: " + error.message,
+            );
+          }
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchProfile();
+    }, []),
+  );
+
+  // ログアウト処理
+  const handleLogout = async () => {
+    Alert.alert("ログアウト", "本当にログアウトしますか？", [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "ログアウト",
+        style: "destructive",
+        onPress: async () => {
+          await supabase.auth.signOut();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "auth" as never }],
+          });
+        },
+      },
+    ]);
+  };
+
+  // ローディング中はスピナーを表示
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -33,12 +108,21 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate("profile" as never)}
         >
           <View style={styles.profileRow}>
-            <View style={styles.profileIcon} /> {/* 仮プロフィール画像 */}
+            {profile?.profile_image_url ? (
+              <Image
+                source={{ uri: profile.profile_image_url }}
+                style={styles.profileIcon}
+              />
+            ) : (
+              <View style={styles.profileIcon} />
+            )}
             <View style={styles.profileInfo}>
-              <Text style={styles.profileNickname}>{nickname}</Text>
-              <Text style={styles.profileEmail}>{email}</Text>
+              <Text style={styles.profileNickname}>
+                {profile?.nickname || "ニックネーム未設定"}
+              </Text>
+              <Text style={styles.profileEmail}>{profile?.email}</Text>
             </View>
-            <Text style={styles.chevron}>{">"}</Text>
+            <ChevronRight size={20} color="#bbb" />
           </View>
         </TouchableOpacity>
         <View style={{ height: 12 }} />
@@ -50,9 +134,9 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate("account" as never)}
         >
           <View style={styles.itemRow}>
-            <UserRound size={22} color="#888" style={styles.itemIcon} />
+            <UserRound size={22} color="#555" style={styles.itemIcon} />
             <Text style={styles.itemText}>アカウント情報</Text>
-            <Text style={styles.chevron}>{">"}</Text>
+            <ChevronRight size={20} color="#bbb" />
           </View>
         </TouchableOpacity>
 
@@ -63,9 +147,9 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate("notice" as never)}
         >
           <View style={styles.itemRow}>
-            <Bell size={22} color="#888" style={styles.itemIcon} />
+            <Bell size={22} color="#555" style={styles.itemIcon} />
             <Text style={styles.itemText}>お知らせ</Text>
-            <Text style={styles.chevron}>{">"}</Text>
+            <ChevronRight size={20} color="#bbb" />
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -73,9 +157,9 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate("help" as never)}
         >
           <View style={styles.itemRow}>
-            <HelpCircle size={22} color="#888" style={styles.itemIcon} />
+            <HelpCircle size={22} color="#555" style={styles.itemIcon} />
             <Text style={styles.itemText}>ヘルプセンター</Text>
-            <Text style={styles.chevron}>{">"}</Text>
+            <ChevronRight size={20} color="#bbb" />
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -83,28 +167,14 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate("terms" as never)}
         >
           <View style={styles.itemRow}>
-            <FileText size={22} color="#888" style={styles.itemIcon} />
+            <FileText size={22} color="#555" style={styles.itemIcon} />
             <Text style={styles.itemText}>利用規約</Text>
-            <Text style={styles.chevron}>{">"}</Text>
+            <ChevronRight size={20} color="#bbb" />
           </View>
         </TouchableOpacity>
 
         {/* ログアウトは一番下 */}
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={() => {
-            Alert.alert("ログアウト", "本当にログアウトしますか？", [
-              { text: "キャンセル", style: "cancel" },
-              {
-                text: "ログアウト",
-                style: "destructive",
-                onPress: () => {
-                  /* ログアウト処理 */
-                },
-              },
-            ]);
-          }}
-        >
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>ログアウト</Text>
         </TouchableOpacity>
 
@@ -118,6 +188,12 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
   container: {
     flex: 1,
     backgroundColor: "#fff",
@@ -127,8 +203,8 @@ const styles = StyleSheet.create({
   },
   item: {
     borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
-    paddingVertical: 18,
+    borderBottomColor: "#eee",
+    paddingVertical: 16,
     paddingHorizontal: 20,
     backgroundColor: "#fff",
   },
@@ -138,7 +214,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginHorizontal: 16,
     marginBottom: 8,
-    paddingVertical: 28,
+    paddingVertical: 20,
     paddingHorizontal: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -157,9 +233,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: "#eee",
-    marginRight: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    marginRight: 16,
   },
   profileInfo: {
     flex: 1,
@@ -178,21 +252,14 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
   },
   itemIcon: {
-    marginRight: 12,
+    marginRight: 16,
   },
   itemText: {
     fontSize: 16,
     color: "#222",
-    textAlign: "left",
     flex: 1,
-  },
-  chevron: {
-    fontSize: 18,
-    color: "#bbb",
-    marginLeft: 8,
   },
   logoutButton: {
     marginTop: 32,
@@ -208,7 +275,6 @@ const styles = StyleSheet.create({
     color: "#d32f2f",
     fontWeight: "bold",
     fontSize: 15,
-    textAlign: "center",
   },
   versionContainer: {
     alignItems: "center",
@@ -225,5 +291,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
     paddingVertical: 8,
     paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
   },
 });
