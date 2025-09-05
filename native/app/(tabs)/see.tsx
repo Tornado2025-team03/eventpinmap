@@ -20,6 +20,7 @@ import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
 import { useLocalSearchParams } from "expo-router";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 type LatLng = { latitude: number; longitude: number };
 type Tag = { id: string; name: string };
@@ -87,7 +88,83 @@ export default function App() {
   }, [pins, selectedTags]);
   // モーダルの対象
   const [selectedEvent, setSelectedEvent] = useState<Pin | null>(null);
+  const [dropPinModal, setDropPinModal] = useState<{
+    visible: boolean;
+    coord: LatLng | null;
+  }>(() => ({ visible: false, coord: null }));
 
+  const [pinStartAt, setPinStartAt] = useState<Date | null>(null);
+  const [pinEndAt, setPinEndAt] = useState<Date | null>(null);
+
+  const [androidPicker, setAndroidPicker] = useState<{
+    type: "start" | "end";
+    mode: "date" | "time";
+    show: boolean;
+    tempDate: Date | null;
+  } | null>(null);
+
+  const [myAvailablePin, setMyAvailablePin] = useState<{
+    coord: LatLng;
+    startAt: Date;
+    endAt: Date;
+  } | null>(null);
+
+  async function setUserStatusAvailable(
+    coord: { latitude: number; longitude: number },
+    startAt: Date,
+    endAt: Date | null,
+  ) {
+    const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+    const userId = user?.data?.user?.id;
+    if (!userId) {
+      Alert.alert("ログインしてください");
+      return;
+    }
+    const { error } = await supabase.from("user_statuses").upsert(
+      {
+        user_id: userId,
+        status: "available",
+        latitude: coord.latitude,
+        longitude: coord.longitude,
+        start_at: startAt.toISOString(),
+        expires_at: endAt ? endAt.toISOString() : null,
+      },
+      { onConflict: "user_id" },
+    );
+
+    if (error) {
+      Alert.alert("ステータス更新エラー", error.message);
+      return;
+    }
+    setMyAvailablePin(endAt ? { coord, startAt, endAt } : null);
+    Alert.alert("ステータスを「available」にしました！");
+  }
+
+  async function setUserStatusHidden() {
+    const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+    const userId = user?.data?.user?.id;
+    if (!userId) {
+      Alert.alert("ログインしてください");
+      return;
+    }
+    const { error } = await supabase.from("user_statuses").upsert(
+      {
+        user_id: userId,
+        status: "hidden",
+        latitude: null,
+        longitude: null,
+        start_at: new Date().toISOString(),
+        expires_at: null,
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) {
+      Alert.alert("ステータス更新エラー", error.message);
+      return;
+    }
+    setMyAvailablePin(null);
+    Alert.alert("ステータスを「hidden」にしました");
+  }
   // Row → Pin 変換
   const rowToPin = useCallback((r: EventRow): Pin | null => {
     const lat = r.latitude != null ? Number(r.latitude) : NaN;
@@ -285,6 +362,16 @@ export default function App() {
     Linking.openURL(url).catch(() => {});
   }, []);
 
+  const handleMapLongPress = useCallback(
+    (e: { nativeEvent: { coordinate: LatLng } }) => {
+      setDropPinModal({ visible: true, coord: e.nativeEvent.coordinate });
+      const now = new Date();
+      setPinStartAt(now);
+      setPinEndAt(new Date(now.getTime() + 60 * 60 * 1000)); // 1 hour later
+    },
+    [],
+  );
+
   if (!region) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -307,7 +394,9 @@ export default function App() {
         showsCompass
         showsScale={Platform.OS === "ios"}
         onRegionChangeComplete={(r) => setRegion(r)}
+        onLongPress={handleMapLongPress}
       >
+        {/* Existing pins */}
         {!loadingPins &&
           pins.map((pin) => {
             const isHighlighted =
@@ -327,6 +416,37 @@ export default function App() {
               />
             );
           })}
+
+        {/* Blue pin for user's available status */}
+        {myAvailablePin &&
+          (() => {
+            const now = new Date();
+            if (now >= myAvailablePin.startAt && now <= myAvailablePin.endAt) {
+              return (
+                <Marker
+                  coordinate={myAvailablePin.coord}
+                  pinColor="blue"
+                  title="あなたの利用可能ピン"
+                  onPress={() => {
+                    Alert.alert(
+                      "ステータス変更",
+                      "ステータスを「hidden」にしますか？",
+                      [
+                        { text: "キャンセル", style: "cancel" },
+                        {
+                          text: "OK",
+                          onPress: async () => {
+                            await setUserStatusHidden();
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                />
+              );
+            }
+            return null;
+          })()}
       </MapView>
 
       {/* 右上のツール群 */}
@@ -633,6 +753,165 @@ export default function App() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* ドロップピンモーダル */}
+      <Modal
+        visible={dropPinModal.visible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDropPinModal({ visible: false, coord: null })}
+      >
+        <TouchableWithoutFeedback
+          onPress={() => setDropPinModal({ visible: false, coord: null })}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.35)",
+              justifyContent: "flex-end",
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: "white",
+                  padding: 16,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  minHeight: 220,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}
+                >
+                  ステータスを「available」に変更
+                </Text>
+                <Text>開始時刻</Text>
+                <DateTimeInput
+                  value={pinStartAt}
+                  onChange={setPinStartAt}
+                  onAndroidPress={() => {
+                    setDropPinModal({
+                      visible: false,
+                      coord: dropPinModal.coord,
+                    });
+                    setTimeout(() => {
+                      setAndroidPicker({
+                        type: "start",
+                        mode: "date",
+                        show: true,
+                        tempDate: null,
+                      });
+                    }, 300);
+                  }}
+                  type="start"
+                />
+                <DateTimeInput
+                  value={pinEndAt}
+                  onChange={setPinEndAt}
+                  onAndroidPress={() => {
+                    setDropPinModal({
+                      visible: false,
+                      coord: dropPinModal.coord,
+                    });
+                    setTimeout(() => {
+                      setAndroidPicker({
+                        type: "end",
+                        mode: "date",
+                        show: true,
+                        tempDate: null,
+                      });
+                    }, 300);
+                  }}
+                  type="end"
+                />
+                <View style={{ flexDirection: "row", marginTop: 16, gap: 12 }}>
+                  <ActionBtn
+                    label="キャンセル"
+                    onPress={() =>
+                      setDropPinModal({ visible: false, coord: null })
+                    }
+                  />
+                  <ActionBtn
+                    label="確定"
+                    onPress={async () => {
+                      if (!dropPinModal.coord || !pinStartAt) {
+                        Alert.alert("開始時刻を入力してください");
+                        return;
+                      }
+                      Alert.alert(
+                        "確認",
+                        "この場所で「available」にしますか？",
+                        [
+                          { text: "キャンセル", style: "cancel" },
+                          {
+                            text: "OK",
+                            onPress: async () => {
+                              if (dropPinModal.coord) {
+                                await setUserStatusAvailable(
+                                  dropPinModal.coord,
+                                  pinStartAt,
+                                  pinEndAt,
+                                );
+                                setDropPinModal({
+                                  visible: false,
+                                  coord: null,
+                                });
+                              }
+                            },
+                          },
+                        ],
+                      );
+                    }}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {androidPicker?.show && Platform.OS === "android" && (
+        <DateTimePicker
+          value={
+            androidPicker.tempDate ??
+            (androidPicker.type === "start"
+              ? (pinStartAt ?? new Date())
+              : (pinEndAt ?? new Date()))
+          }
+          mode={androidPicker.mode}
+          display="default"
+          minuteInterval={1}
+          onChange={(_, date) => {
+            if (!date) {
+              setAndroidPicker(null);
+              return;
+            }
+            if (androidPicker.mode === "date") {
+              // After picking date, show time picker
+              setAndroidPicker({
+                ...androidPicker,
+                mode: "time",
+                show: true,
+                tempDate: date,
+              });
+            } else {
+              // Combine date and time
+              const baseDate = androidPicker.tempDate ?? new Date();
+              const finalDate = new Date(baseDate);
+              finalDate.setHours(date.getHours());
+              finalDate.setMinutes(date.getMinutes());
+              finalDate.setSeconds(0);
+              if (androidPicker.type === "start") setPinStartAt(finalDate);
+              else setPinEndAt(finalDate);
+              setAndroidPicker(null);
+              setTimeout(() => {
+                setDropPinModal({ visible: true, coord: dropPinModal.coord });
+              }, 300);
+            }
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -745,4 +1024,62 @@ async function handleParticipate(event: Pin | null) {
     return;
   }
   Alert.alert("参加しました！");
+}
+
+function DateTimeInput({
+  value,
+  onChange,
+  onAndroidPress,
+  type,
+}: {
+  value: Date | null;
+  onChange: (d: Date) => void;
+  onAndroidPress?: () => void;
+  type: "start" | "end";
+}) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => {
+          if (Platform.OS === "android" && onAndroidPress) {
+            onAndroidPress();
+          } else {
+            setShow(true);
+          }
+        }}
+        style={{
+          backgroundColor: "#eee",
+          borderRadius: 8,
+          padding: 8,
+          marginTop: 4,
+        }}
+      >
+        <Text>
+          {value
+            ? value.toLocaleString(undefined, {
+                hour: "2-digit",
+                minute: "2-digit",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              })
+            : "選択してください"}
+        </Text>
+      </TouchableOpacity>
+      {Platform.OS === "ios" && show && (
+        <DateTimePicker
+          value={value ?? new Date()}
+          mode="datetime"
+          display="spinner"
+          minuteInterval={1}
+          onChange={(_, date) => {
+            setShow(false);
+            if (date) onChange(date);
+          }}
+        />
+      )}
+    </>
+  );
 }
