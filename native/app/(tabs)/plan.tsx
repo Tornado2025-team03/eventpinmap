@@ -72,6 +72,7 @@ export default function EventCreateScreen() {
               setQuickDate={f.setQuickDate}
               next={f.next}
               canNext1={f.canNext1}
+              aiFill={f.aiFill}
             />
           )}
 

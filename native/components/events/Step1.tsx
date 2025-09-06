@@ -39,6 +39,7 @@ export function Step1(props: {
   setQuickDate: (k: "today" | "tomorrow" | "weekend") => void;
   next: () => void;
   canNext1: boolean;
+  aiFill: (freeText: string) => Promise<void>;
 }) {
   const {
     title,
@@ -69,6 +70,7 @@ export function Step1(props: {
   } = props;
 
   const [showMap, setShowMap] = React.useState(false);
+  const [aiBusy, setAiBusy] = React.useState(false);
   const [searching, setSearching] = React.useState(false);
 
   return (
@@ -90,8 +92,27 @@ export function Step1(props: {
           onChangeText={setTitle}
         />
         <Button
-          title="AIらくらく入力"
-          onPress={() => setTitle(suggestedTitle)}
+          title={aiBusy ? "解析中…" : "AIらくらく入力"}
+          disabled={aiBusy}
+          onPress={async () => {
+            const text = (title ?? "").trim();
+            if (!text) {
+              Alert.alert(
+                "自由文が空です",
+                "上の欄にやりたいことを書いてください。",
+              );
+              return;
+            }
+            setAiBusy(true);
+            try {
+              await props.aiFill(text);
+              Alert.alert("反映しました", "候補をフォームに反映しました。");
+            } catch (e: any) {
+              Alert.alert("AI入力に失敗", e?.message ?? "解析に失敗しました");
+            } finally {
+              setAiBusy(false);
+            }
+          }}
         />
       </View>
 

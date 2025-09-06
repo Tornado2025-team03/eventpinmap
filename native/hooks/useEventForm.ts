@@ -5,6 +5,8 @@ import { useRouter } from "expo-router";
 import { insertEvent, insertEventTagIds } from "../services/events";
 import { fetchTagOptionsByNames } from "../services/tagOptions";
 import { geocodeAddress, reverseGeocode } from "../services/geocode";
+import { aiFillFromText } from "../services/nlp";
+import { aiFillRemote } from "../services/ai";
 import type { Rule, Step, TargetField } from "../types/event";
 
 function quickDate(kind: "today" | "tomorrow" | "weekend") {
@@ -41,6 +43,14 @@ function mergeDateOrTime(
 
 function buildDescription(params: { description: string }) {
   return params.description || "";
+}
+
+function buildAutoTitle(what?: string, when?: Date | null) {
+  const w = (what || "").trim();
+  const datePart = when ? when.toLocaleDateString() : "日時未定";
+  if (!w && !when) return "";
+  if (!w) return `イベント（${datePart}）`;
+  return `『${w}』をする会（${datePart}）`;
 }
 
 export function useEventForm() {
@@ -281,6 +291,47 @@ export function useEventForm() {
     onChangePicker,
     setQuickDate,
     handlePublish,
+    async aiFill(freeText: string) {
+      const text = (freeText ?? "").trim();
+      if (!text) return;
+      // Try remote first; on any failure, gracefully fall back to local parsing
+      let updated = false;
+      try {
+        const remote = await aiFillRemote(text);
+        if (remote) {
+          if (remote.what) setWhat(remote.what);
+          if (remote.where) setWhere(remote.where);
+          setWhen(remote.when ?? null);
+          setEndAt(remote.endAt ?? null);
+          setLatitude(
+            typeof remote.latitude === "number" ? remote.latitude : null,
+          );
+          setLongitude(
+            typeof remote.longitude === "number" ? remote.longitude : null,
+          );
+          // Also update the title based on what/when
+          const nextTitle = buildAutoTitle(remote.what, remote.when ?? null);
+          if (nextTitle) setTitle(nextTitle);
+          updated = true;
+        }
+      } catch (_err) {
+        // ignore; will fallback to local
+      }
+
+      if (!updated) {
+        const local = await aiFillFromText(text);
+        if (local.what) setWhat(local.what);
+        if (local.where) setWhere(local.where);
+        setWhen(local.when ?? null);
+        setEndAt(local.endAt ?? null);
+        setLatitude(typeof local.latitude === "number" ? local.latitude : null);
+        setLongitude(
+          typeof local.longitude === "number" ? local.longitude : null,
+        );
+        const nextTitle = buildAutoTitle(local.what, local.when ?? null);
+        if (nextTitle) setTitle(nextTitle);
+      }
+    },
     // geo helpers
     async geocodeCurrentAddress() {
       if (!where?.trim()) return;
