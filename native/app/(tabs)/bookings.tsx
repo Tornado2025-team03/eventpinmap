@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Modal,
@@ -9,63 +10,152 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../../lib/supabase";
 
-// サンプルデータ
-const initialBookings = [
-  {
-    id: 1,
-    name: "React Native もくもく会@渋谷",
-    description:
-      "アプリ開発者やデザイナーが集まって、各自の作業を進める会です。初心者も歓迎！",
-    location: "TECH BISTRO SHIBUYA",
-    start_at: "2025/09/15 19:00",
-    end_at: "2025/09/15 21:30",
-    status: "開催前",
-  },
-  {
-    id: 2,
-    name: "スタートアップのための資金調達セミナー",
-    description:
-      "VCからの資金調達のノウハウや、魅力的な事業計画書の作り方を解説します。",
-    location: "ナレッジベース大阪 カンファレンスルームB",
-    start_at: "2025/08/25 14:00",
-    end_at: "2025/08/25 16:00",
-    status: "終了",
-  },
-];
+// --- Supabase用 型定義 ---
+export type Event = {
+  id: string;
+  name: string;
+  description: string;
+  location: string;
+  start_at: string;
+  end_at: string;
+  status: string;
+};
 
-const initialInvites = [
-  {
-    id: 101,
-    name: "新規イベントの招待",
-    description: "あああ",
-    location: "新宿コワーキングスペース",
-    start_at: "2025/09/20 18:00",
-    end_at: "2025/09/20 20:00",
-    status: "招待中",
-  },
-];
+export type EventMember = {
+  id: string;
+  user_id: string;
+  event_id: string;
+  role: string;
+};
+
+export type Announcement = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  comment: string;
+  created_at: string;
+};
+
+// --- Supabaseからデータ取得・更新する関数 ---
+export async function fetchEventMembersWithEvents(userId: string) {
+  // event_membersから自分の参加・招待情報を取得
+  const { data: members, error: memberError } = await supabase
+    .from("event_members")
+    .select("*, event:events(*)")
+    .eq("user_id", userId);
+  if (memberError) throw memberError;
+  // event:events(*)でイベント詳細も同時取得
+  return members || [];
+}
+
+export async function updateEventMemberRole(id: string, newRole: string) {
+  const { error } = await supabase
+    .from("event_members")
+    .update({ role: newRole })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteEventMember(id: string) {
+  const { error } = await supabase.from("event_members").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchAnnouncements(
+  eventId: string,
+): Promise<Announcement[]> {
+  const { data, error } = await supabase
+    .from("announcements")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
 
 export default function BookingsScreen() {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"bookings" | "invites">(
     "bookings",
   );
-  const [bookings, setBookings] = useState(initialBookings);
-  const [invites, setInvites] = useState(initialInvites);
-  // お知らせ（DBから取得する想定）
+  const [bookings, setBookings] = useState<any[]>([]); // 予約済み
+  const [invites, setInvites] = useState<any[]>([]); // 招待
   const [notice, setNotice] = useState<string>("");
+  const [userId, setUserId] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    // 仮: DBから取得する処理
-    if (selectedId !== null) {
-      // ここでAPI等から取得する
-      // 例: fetchNotice(selectedId).then(setNotice)
-      // 今はダミー
-      setNotice("イベントに関する最新のお知らせが表示されます。");
-    } else {
+  // ユーザーID取得
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (data?.user?.id) setUserId(data.user.id);
+    })();
+  }, []);
+
+  // 画面がフォーカスされるたびにイベント一覧を取得
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!userId) return;
+      let isActive = true;
+      (async () => {
+        try {
+          const members = await fetchEventMembersWithEvents(userId);
+          const now = new Date();
+          const valid = members.filter((m: any) => {
+            const end = new Date(m.event.end_at);
+            return end > now;
+          });
+          if (isActive) {
+            // 開始日時が早い順にソート
+            const bookingsList = valid
+              .filter(
+                (m: any) => m.role === "organizer" || m.role === "participant",
+              )
+              .map((m: any) => ({ ...m.event, memberId: m.id }))
+              .sort(
+                (a: any, b: any) =>
+                  new Date(a.start_at).getTime() -
+                  new Date(b.start_at).getTime(),
+              );
+            const invitesList = valid
+              .filter((m: any) => m.role === "invited")
+              .map((m: any) => ({ ...m.event, memberId: m.id }))
+              .sort(
+                (a: any, b: any) =>
+                  new Date(a.start_at).getTime() -
+                  new Date(b.start_at).getTime(),
+              );
+            setBookings(bookingsList);
+            setInvites(invitesList);
+          }
+        } catch (e) {
+          if (isActive) {
+            setBookings([]);
+            setInvites([]);
+          }
+        }
+      })();
+      return () => {
+        isActive = false;
+      };
+    }, [userId]),
+  );
+
+  // お知らせ取得
+  useEffect(() => {
+    if (!selectedId) {
       setNotice("");
+      return;
     }
+    (async () => {
+      try {
+        const ann = await fetchAnnouncements(selectedId);
+        setNotice(ann.length > 0 ? ann[0].comment : "");
+      } catch {
+        setNotice("");
+      }
+    })();
   }, [selectedId]);
 
   // タブごとに表示するリストを切り替え
@@ -83,9 +173,12 @@ export default function BookingsScreen() {
         {
           text: "取り消す",
           style: "destructive",
-          onPress: () => {
-            setBookings(bookings.filter((b) => b.id !== selectedBooking.id));
-            setSelectedId(null);
+          onPress: async () => {
+            try {
+              await deleteEventMember(selectedBooking.memberId);
+              setBookings(bookings.filter((b) => b.id !== selectedBooking.id));
+              setSelectedId(null);
+            } catch {}
           },
         },
       ],
@@ -95,16 +188,26 @@ export default function BookingsScreen() {
   // 招待イベントに「参加」
   const handleAcceptInvite = () => {
     if (!selectedBooking) return;
-    setBookings([...bookings, selectedBooking]);
-    setInvites(invites.filter((b) => b.id !== selectedBooking.id));
-    setSelectedId(null);
+    (async () => {
+      try {
+        await updateEventMemberRole(selectedBooking.memberId, "participant");
+        setInvites(invites.filter((b) => b.id !== selectedBooking.id));
+        setBookings([...bookings, selectedBooking]);
+        setSelectedId(null);
+      } catch {}
+    })();
   };
 
   // 招待イベントに「不参加」
   const handleDeclineInvite = () => {
     if (!selectedBooking) return;
-    setInvites(invites.filter((b) => b.id !== selectedBooking.id));
-    setSelectedId(null);
+    (async () => {
+      try {
+        await deleteEventMember(selectedBooking.memberId);
+        setInvites(invites.filter((b) => b.id !== selectedBooking.id));
+        setSelectedId(null);
+      } catch {}
+    })();
   };
 
   return (
@@ -164,16 +267,35 @@ export default function BookingsScreen() {
         <ScrollView contentContainerStyle={styles.listContainer}>
           {eventList.map((booking) => {
             const isSelected = selectedId === booking.id;
+            // 日付フォーマット: 開始時間: YYYY-MM-DD HH:mm, 終了時間: YYYY-MM-DD HH:mm
+            const start = new Date(booking.start_at);
+            const end = new Date(booking.end_at);
+            const now = new Date();
+            const pad = (n: number) => n.toString().padStart(2, "0");
+            const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())} ${pad(start.getHours())}:${pad(start.getMinutes())}`;
+            const endStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())} ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+            // 開催中判定: 現在時刻が開始以上・終了未満
+            const isOngoing = now >= start && now < end;
             return (
               <TouchableOpacity
                 key={booking.id}
-                style={[styles.card, isSelected && styles.selectedCard]}
+                style={[
+                  styles.card,
+                  isSelected && styles.selectedCard,
+                  isOngoing && styles.openCard,
+                ]}
                 activeOpacity={0.8}
                 onPress={() => setSelectedId(booking.id)}
               >
+                {/* 開催中ポップ */}
+                {isOngoing && (
+                  <View style={styles.openPop}>
+                    <Text style={styles.openPopText}>開催中！</Text>
+                  </View>
+                )}
                 <Text style={styles.cardTitle}>{booking.name}</Text>
-                <Text style={styles.cardDate}>開始: {booking.start_at}</Text>
-                <Text style={styles.cardDate}>終了: {booking.end_at}</Text>
+                <Text style={styles.cardDate}>開始時間: {startStr}</Text>
+                <Text style={styles.cardDate}>終了時間: {endStr}</Text>
                 <Text style={styles.cardlocation}>
                   場所: {booking.location}
                 </Text>
@@ -198,25 +320,36 @@ export default function BookingsScreen() {
             {selectedBooking && (
               <>
                 <Text style={styles.modalTitle}>{selectedBooking.name}</Text>
-                <Text style={styles.modalItem}>
-                  開始日時: {selectedBooking.start_at}
-                </Text>
-                <Text style={styles.modalItem}>
-                  終了日時: {selectedBooking.end_at}
-                </Text>
+                {(() => {
+                  const start = new Date(selectedBooking.start_at);
+                  const end = new Date(selectedBooking.end_at);
+                  const pad = (n: number) => n.toString().padStart(2, "0");
+                  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())} ${pad(start.getHours())}:${pad(start.getMinutes())}`;
+                  const endStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())} ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+                  return (
+                    <>
+                      <Text style={styles.modalItem}>開始日時: {startStr}</Text>
+                      <Text style={styles.modalItem}>終了日時: {endStr}</Text>
+                    </>
+                  );
+                })()}
                 <Text style={styles.modalItem}>
                   場所: {selectedBooking.location}
                 </Text>
-                <View style={{ height: 12 }} />
-                <Text style={styles.modalItem}>
-                  説明: {selectedBooking.description}
-                </Text>
-                <Text style={styles.modalItem}>
-                  ステータス: {selectedBooking.status}
-                </Text>
+                <View style={styles.modalDivider} />
+                {(() => {
+                  const lines = selectedBooking.description.split(/\r?\n/);
+                  return lines.map((line: string, idx: number) => (
+                    <Text style={styles.modalItem} key={idx}>
+                      {idx === 0 ? `説明: ${line}` : line}
+                    </Text>
+                  ));
+                })()}
                 <View style={{ height: 8 }} />
                 <Text style={styles.modalNoticeTitle}>お知らせ</Text>
-                <Text style={styles.modalNotice}>{notice}</Text>
+                <Text style={styles.modalNotice}>
+                  {notice ? notice : "お知らせはありません"}
+                </Text>
 
                 {/* ボタン群 */}
                 {activeTab === "bookings" ? (
@@ -365,6 +498,26 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 2,
     borderColor: "transparent",
+    position: "relative",
+  },
+  openCard: {
+    borderColor: "#43a047",
+    borderWidth: 2,
+  },
+  openPop: {
+    position: "absolute",
+    top: 8,
+    right: 12,
+    backgroundColor: "#43a047",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    zIndex: 2,
+  },
+  openPopText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 13,
   },
   selectedCard: {
     borderColor: "#2196F3",
@@ -416,6 +569,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#222",
     marginBottom: 8,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: "#eee",
+    marginVertical: 12,
   },
   modalHint: {
     fontSize: 14,
