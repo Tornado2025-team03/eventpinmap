@@ -2,11 +2,7 @@ import React from "react";
 import { Alert, Platform } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "expo-router";
-import {
-  insertEvent,
-  insertEventTagIds,
-  insertEventTags,
-} from "../services/events";
+import { insertEvent, insertEventTagIds } from "../services/events";
 import { fetchTagOptionsByNames } from "../services/tagOptions";
 import { geocodeAddress, reverseGeocode } from "../services/geocode";
 import type { Rule, Step, TargetField } from "../types/event";
@@ -165,7 +161,7 @@ export function useEventForm() {
   const suggestedTitle = React.useMemo(() => {
     if (!what && !when) return "";
     const datePart = when ? when.toLocaleDateString() : "日時未定";
-    return `『${what}』をする会（${datePart}）`;
+    return `『${what}』をする！！`;
   }, [what, when]);
 
   const canNext1 = true;
@@ -212,6 +208,7 @@ export function useEventForm() {
       status: rule,
       latitude,
       longitude,
+      icon: iconName || "Calendar",
     } as const;
 
     try {
@@ -240,16 +237,6 @@ export function useEventForm() {
               "タグ未登録",
               "選択したタグに対応するマスタが見つからず、タグは保存されませんでした。",
             );
-          }
-
-          // Save chosen lucide icon name as a free tag as fallback storage
-          // Format: "lucide_icon:<IconName>"
-          if (iconName) {
-            try {
-              await insertEventTags(eventId, [`lucide_icon:${iconName}`]);
-            } catch (e) {
-              console.warn("Failed to insert lucide_icon tag", e);
-            }
           }
         }
       } catch (tagErr) {

@@ -12,6 +12,7 @@ export interface EventInsertPayload {
   status: Rule;
   latitude: number | null;
   longitude: number | null;
+  icon?: string | null; // lucide-react-native icon name
 }
 
 export interface OptionalDetails {
