@@ -89,6 +89,10 @@ export default function EventCreateScreen() {
               setAddDetailsOpen={f.setAddDetailsOpen}
               back={f.back}
               next={f.next}
+              iconName={f.iconName}
+              setIconName={f.setIconName}
+              chooseIconManually={f.chooseIconManually}
+              resetIconAuto={f.resetIconAuto}
             />
           )}
 
@@ -110,6 +114,7 @@ export default function EventCreateScreen() {
               publishing={f.publishing}
               back={f.back}
               handlePublish={f.handlePublish}
+              iconName={f.iconName}
             />
           )}
         </ScrollView>
