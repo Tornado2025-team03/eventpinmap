@@ -15,6 +15,7 @@ import {
   Modal,
   Linking,
   TouchableWithoutFeedback,
+  Image,
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
@@ -70,6 +71,12 @@ export default function App() {
   const [pins, setPins] = useState<Pin[]>([]);
   const [loadingPins, setLoadingPins] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+
+  const [searchStart, setSearchStart] = useState<Date | null>(null);
+  const [searchEnd, setSearchEnd] = useState<Date | null>(null);
+
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
   const allTags = useMemo(
     () =>
       Array.from(
@@ -81,11 +88,19 @@ export default function App() {
   );
 
   const filteredPins = useMemo(() => {
-    if (!selectedTags.length) return pins;
-    return pins.filter((p) =>
-      p.tags?.some((t) => selectedTags.some((sel) => sel.id === t.id)),
-    );
-  }, [pins, selectedTags]);
+    let result = pins;
+    // Remove tag filtering here!
+    if (searchStart || searchEnd) {
+      result = result.filter((p) => {
+        const start = p.start_at ? new Date(p.start_at) : null;
+        const end = p.end_at ? new Date(p.end_at) : null;
+        if (searchStart && start && start < searchStart) return false;
+        if (searchEnd && end && end > searchEnd) return false;
+        return true;
+      });
+    }
+    return result;
+  }, [pins, searchStart, searchEnd]);
   // モーダルの対象
   const [selectedEvent, setSelectedEvent] = useState<Pin | null>(null);
   const [dropPinModal, setDropPinModal] = useState<{
@@ -101,6 +116,7 @@ export default function App() {
     mode: "date" | "time";
     show: boolean;
     tempDate: Date | null;
+    target: "search" | "status";
   } | null>(null);
 
   const [myAvailablePin, setMyAvailablePin] = useState<{
@@ -383,6 +399,61 @@ export default function App() {
 
   return (
     <View style={{ flex: 1 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingTop: 35,
+          padding: 8,
+          backgroundColor: "#fff",
+          borderBottomWidth: 1,
+          borderColor: "#eee",
+        }}
+      >
+        <DateTimeInput
+          value={searchStart}
+          onChange={setSearchStart}
+          onAndroidPress={() => {
+            setAndroidPicker({
+              type: "start",
+              mode: "date",
+              show: true,
+              tempDate: null,
+              target: "search",
+            });
+          }}
+          type="start"
+        />
+        <Text style={{ marginHorizontal: 8 }}>〜</Text>
+        <DateTimeInput
+          value={searchEnd}
+          onChange={setSearchEnd}
+          onAndroidPress={() => {
+            setAndroidPicker({
+              type: "end",
+              mode: "date",
+              show: true,
+              tempDate: null,
+              target: "search",
+            });
+          }}
+          type="end"
+        />
+        <TouchableOpacity
+          onPress={() => {
+            setSearchStart(null);
+            setSearchEnd(null);
+          }}
+          style={{
+            marginLeft: 8,
+            backgroundColor: "#eee",
+            borderRadius: 8,
+            padding: 8,
+          }}
+        >
+          <Text>クリア</Text>
+        </TouchableOpacity>
+      </View>
       {/* Map */}
       <MapView
         ref={mapRef}
@@ -398,7 +469,7 @@ export default function App() {
       >
         {/* Existing pins */}
         {!loadingPins &&
-          pins.map((pin) => {
+          filteredPins.map((pin) => {
             const isHighlighted =
               selectedTags.length > 0 &&
               pin.tags?.some((t) =>
@@ -411,7 +482,7 @@ export default function App() {
                   latitude: pin.latitude,
                   longitude: pin.longitude,
                 }}
-                pinColor={isHighlighted ? "#FFD700" : "tomato"}
+                pinColor={isHighlighted ? "#FFD700" : "tomato"} // Highlight if matches tag
                 onPress={() => handleMarkerPress(pin)}
               />
             );
@@ -453,29 +524,67 @@ export default function App() {
       <View
         style={{
           position: "absolute",
-          top: 16,
+          right: 5,
+          bottom: 5,
+          zIndex: 20,
+        }}
+      >
+        <RoundBtn label="Refresh" onPress={() => void loadEvents()} />
+      </View>
+      <View
+        style={{
+          position: "absolute",
+          top: 100,
           right: 16,
           gap: 8,
           alignItems: "center",
         }}
       >
-        <RoundBtn label="Refresh" onPress={() => void loadEvents()} />
-        <RoundBtn label="中心へ" onPress={recenter} />
+        {/* <RoundBtn label="中心へ" onPress={recenter} /> */}
         <TouchableOpacity
           onPress={() => setTagModalVisible(true)}
           style={{
-            backgroundColor: "#0A84FF",
-            borderRadius: 32,
+            backgroundColor: "#FFFFFF",
+            borderRadius: 24,
+            width: 48,
+            height: 48,
             padding: 16,
-            marginTop: 8,
+            marginTop: 2,
             elevation: 4,
             shadowColor: "#000",
             shadowOpacity: 0.2,
             shadowOffset: { width: 0, height: 2 },
             shadowRadius: 4,
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <Text style={{ color: "white", fontSize: 24 }}>🔍</Text>
+          <Image
+            source={require("../../assets/images/search.png")} // Update path as needed
+            style={{ width: 24, height: 24 }}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setHelpModalVisible(true)}
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: 24,
+            width: 48,
+            height: 48,
+            marginTop: 2,
+            elevation: 4,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 4,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 22, fontWeight: "bold", color: "#0A84FF" }}>
+            ?
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -801,6 +910,7 @@ export default function App() {
                         mode: "date",
                         show: true,
                         tempDate: null,
+                        target: "status",
                       });
                     }, 300);
                   }}
@@ -820,6 +930,7 @@ export default function App() {
                         mode: "date",
                         show: true,
                         tempDate: null,
+                        target: "status",
                       });
                     }, 300);
                   }}
@@ -871,13 +982,71 @@ export default function App() {
         </TouchableWithoutFeedback>
       </Modal>
 
+      <Modal
+        visible={helpModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setHelpModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setHelpModalVisible(false)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.35)",
+              justifyContent: "flex-end",
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: "white",
+                  padding: 20,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  minHeight: 220,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 18, fontWeight: "700", marginBottom: 12 }}
+                >
+                  ドロップピンで「available」ステータスを設定する方法
+                </Text>
+                <Text style={{ fontSize: 15, marginBottom: 16, color: "#444" }}>
+                  マップ上で長押しするとピンをドロップできます。{"\n"}
+                  ピンをドロップした後、開始時刻と終了時刻を選択して「確定」を押すと、あなたのステータスが「available」になります。
+                </Text>
+                <View style={{ alignItems: "flex-end", marginTop: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setHelpModalVisible(false)}
+                    style={{
+                      backgroundColor: "#0A84FF",
+                      borderRadius: 8,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontWeight: "700" }}>
+                      閉じる
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
       {androidPicker?.show && Platform.OS === "android" && (
         <DateTimePicker
           value={
             androidPicker.tempDate ??
-            (androidPicker.type === "start"
-              ? (pinStartAt ?? new Date())
-              : (pinEndAt ?? new Date()))
+            (androidPicker.target === "search"
+              ? androidPicker.type === "start"
+                ? (searchStart ?? new Date())
+                : (searchEnd ?? new Date())
+              : androidPicker.type === "start"
+                ? (pinStartAt ?? new Date())
+                : (pinEndAt ?? new Date()))
           }
           mode={androidPicker.mode}
           display="default"
@@ -902,12 +1071,17 @@ export default function App() {
               finalDate.setHours(date.getHours());
               finalDate.setMinutes(date.getMinutes());
               finalDate.setSeconds(0);
-              if (androidPicker.type === "start") setPinStartAt(finalDate);
-              else setPinEndAt(finalDate);
+              if (androidPicker.target === "search") {
+                if (androidPicker.type === "start") setSearchStart(finalDate);
+                else setSearchEnd(finalDate);
+              } else {
+                if (androidPicker.type === "start") setPinStartAt(finalDate);
+                else setPinEndAt(finalDate);
+                setTimeout(() => {
+                  setDropPinModal({ visible: true, coord: dropPinModal.coord });
+                }, 300);
+              }
               setAndroidPicker(null);
-              setTimeout(() => {
-                setDropPinModal({ visible: true, coord: dropPinModal.coord });
-              }, 300);
             }
           }}
         />
@@ -1054,9 +1228,14 @@ function DateTimeInput({
           borderRadius: 8,
           padding: 8,
           marginTop: 4,
+          maxWidth: 120, // Limit width
         }}
       >
-        <Text>
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={{ fontSize: 13 }} // Slightly smaller font
+        >
           {value
             ? value.toLocaleString(undefined, {
                 hour: "2-digit",
