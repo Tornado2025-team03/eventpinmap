@@ -79,11 +79,7 @@ export default function Auth() {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        Alert.alert(
-          "確認メールを送信しました",
-          "メール内のリンクからアカウントを有効化してください。",
-        );
-        setMode("signin");
+        router.replace("/profile-setup");
       }
     } catch (e: any) {
       setErrors((prev) => ({
