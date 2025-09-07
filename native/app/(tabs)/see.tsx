@@ -22,6 +22,7 @@ import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
 import { useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as LucideIcons from "lucide-react-native";
 
 type LatLng = { latitude: number; longitude: number };
 type Tag = { id: string; name: string };
@@ -45,7 +46,18 @@ type Pin = LatLng & {
   start_at?: string | null;
   end_at?: string | null;
   tags?: Tag[];
+  icon?: string;
 };
+
+function normalizeIconName(name?: string) {
+  if (!name) return undefined;
+  // Remove spaces/underscores and convert to PascalCase
+  return name
+    .trim()
+    .split(/[\s_-]+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join("");
+}
 
 export default function App() {
   const mapRef = useRef<MapView>(null);
@@ -76,6 +88,7 @@ export default function App() {
   const [searchEnd, setSearchEnd] = useState<Date | null>(null);
 
   const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [viewChanges, setViewChanges] = useState(true);
 
   const allTags = useMemo(
     () =>
@@ -100,7 +113,12 @@ export default function App() {
       });
     }
     return result;
-  }, [pins, searchStart, searchEnd]);
+  }, [pins, searchStart, searchEnd, selectedTags]);
+  useEffect(() => {
+    setViewChanges(true);
+    const timer = setTimeout(() => setViewChanges(false), 500);
+    return () => clearTimeout(timer);
+  }, [filteredPins, selectedTags]);
   // モーダルの対象
   const [selectedEvent, setSelectedEvent] = useState<Pin | null>(null);
   const [dropPinModal, setDropPinModal] = useState<{
@@ -196,6 +214,7 @@ export default function App() {
       latitude: lat,
       longitude: lng,
       tags: (r.event_tags?.map((et) => et.tag).filter(Boolean) as Tag[]) ?? [],
+      icon: r.icon ?? undefined,
     };
   }, []);
 
@@ -234,7 +253,7 @@ export default function App() {
       .from("events")
       .select(
         `
-        id, name, description, location, latitude, longitude, start_at, end_at, updated_at,
+        id, name, description, location, latitude, longitude, start_at, end_at, updated_at, icon,
         event_tags (
           tag:tags (
             id, name
@@ -470,21 +489,37 @@ export default function App() {
         {/* Existing pins */}
         {!loadingPins &&
           filteredPins.map((pin) => {
+            const iconName = normalizeIconName(pin.icon);
+            const IconComponent =
+              iconName &&
+              (LucideIcons as any)[iconName] &&
+              (LucideIcons as any)[iconName].$$typeof
+                ? (LucideIcons as any)[iconName]
+                : LucideIcons.MapPin;
             const isHighlighted =
               selectedTags.length > 0 &&
               pin.tags?.some((t) =>
                 selectedTags.some((sel) => sel.id === t.id),
               );
+            // Log every time pins are rendered (including after refresh)
+            //console.log("Pin:", pin.title, "isHighlighted:", isHighlighted, "tags:", pin.tags, "selectedTags:", selectedTags);
+            // console.log("isHighlighted:", isHighlighted, "color:", isHighlighted ? "red" : "#ffa200ff");
             return (
               <Marker
-                key={`${pin.id}-${selectedTags.map((t) => t.id).join(",") || "all"}`}
+                key={pin.id}
                 coordinate={{
                   latitude: pin.latitude,
                   longitude: pin.longitude,
                 }}
-                pinColor={isHighlighted ? "#FFD700" : "tomato"} // Highlight if matches tag
                 onPress={() => handleMarkerPress(pin)}
-              />
+                tracksViewChanges={viewChanges}
+              >
+                <IconComponent
+                  size={32}
+                  color={isHighlighted ? "red" : "#f6c604ff"}
+                  strokeWidth={2}
+                />
+              </Marker>
             );
           })}
 
@@ -606,35 +641,6 @@ export default function App() {
             : "Syncing…"}
         </Text>
       </View>
-
-      {/* Bottom Center Tab Icon */}
-      {/* <View
-        style={{
-          position: "absolute",
-          bottom: 24,
-          left: 0,
-          right: 0,
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 10,
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => setTagModalVisible(true)}
-          style={{
-            backgroundColor: "#0A84FF",
-            borderRadius: 32,
-            padding: 16,
-            elevation: 4,
-            shadowColor: "#000",
-            shadowOpacity: 0.2,
-            shadowOffset: { width: 0, height: 2 },
-            shadowRadius: 4,
-          }}
-        >
-          <Text style={{ color: "white", fontSize: 24 }}>🏷️</Text>
-        </TouchableOpacity>
-      </View> */}
 
       {/* 詳細モーダル（ピン押下で即表示） */}
       <Modal
