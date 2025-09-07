@@ -32,6 +32,8 @@ export default function Auth() {
     password?: string;
     root?: string;
   }>({});
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
+  const [canSetupProfile, setCanSetupProfile] = useState(false);
 
   const colors = useMemo(
     () => ({
@@ -41,7 +43,7 @@ export default function Auth() {
       text: isDark ? "#e6eef8" : "#0b1020",
       subText: isDark ? "#b7c3d6" : "#55607a",
       border: isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.12)",
-      primary: "#3b82f6", // trend: 少し鮮やかめのブルー
+      primary: "#3b82f6",
       gradientFrom: isDark ? "#0b1324" : "#eaf2ff",
       gradientTo: isDark ? "#06101f" : "#f9fbff",
       danger: "#ef4444",
@@ -77,19 +79,55 @@ export default function Auth() {
         if (error) throw error;
         router.replace("/(tabs)/see");
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        Alert.alert(
-          "確認メールを送信しました",
-          "メール内のリンクからアカウントを有効化してください。",
-        );
-        setMode("signin");
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (signUpError) {
+          if (
+            signUpError.message.includes("Email") ||
+            signUpError.message.includes("confirm")
+          ) {
+            alert("メールをチェックしてください。");
+          } else {
+            alert(signUpError.message);
+          }
+          return;
+        }
+        setAwaitingVerification(true); // メール認証待ち状態
       }
     } catch (e: any) {
       setErrors((prev) => ({
         ...prev,
         root: e?.message ?? "エラーが発生しました",
       }));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // 「メールを認証する」ボタン押下時
+  async function handleCheckVerification() {
+    setLoading(true);
+    try {
+      setCanSetupProfile(true); // 1回押したらすぐ切り替え
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // 「プロファイルを設定する」ボタン押下時
+  async function handleProfileSetup() {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      router.replace("/profile-setup");
+    } catch (e: any) {
+      Alert.alert("エラー", e?.message ?? "サインインに失敗しました");
     } finally {
       setLoading(false);
     }
@@ -243,30 +281,70 @@ export default function Auth() {
               )}
 
               {/* Action */}
-              <TouchableOpacity
-                accessibilityLabel={
-                  mode === "signin" ? "サインイン" : "サインアップ"
-                }
-                style={[
-                  styles.primaryBtn,
-                  {
-                    backgroundColor:
-                      loading || !isValid
-                        ? `${colors.primary}55`
-                        : colors.primary,
-                  },
-                ]}
-                disabled={loading}
-                onPress={handleSubmit}
-              >
-                {loading ? (
-                  <ActivityIndicator />
+              {mode === "signup" && awaitingVerification ? (
+                canSetupProfile ? (
+                  <TouchableOpacity
+                    accessibilityLabel="プロファイルを設定する"
+                    style={[
+                      styles.primaryBtn,
+                      { backgroundColor: colors.primary },
+                    ]}
+                    onPress={handleProfileSetup}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator />
+                    ) : (
+                      <Text style={styles.primaryBtnText}>
+                        プロファイルを設定する
+                      </Text>
+                    )}
+                  </TouchableOpacity>
                 ) : (
-                  <Text style={styles.primaryBtnText}>
-                    {mode === "signin" ? "サインイン" : "アカウント作成"}
-                  </Text>
-                )}
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityLabel="メールを認証する"
+                    style={[
+                      styles.primaryBtn,
+                      { backgroundColor: colors.primary },
+                    ]}
+                    onPress={handleCheckVerification}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator />
+                    ) : (
+                      <Text style={styles.primaryBtnText}>
+                        メールを認証する
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )
+              ) : (
+                <TouchableOpacity
+                  accessibilityLabel={
+                    mode === "signin" ? "サインイン" : "サインアップ"
+                  }
+                  style={[
+                    styles.primaryBtn,
+                    {
+                      backgroundColor:
+                        loading || !isValid
+                          ? `${colors.primary}55`
+                          : colors.primary,
+                    },
+                  ]}
+                  disabled={loading}
+                  onPress={handleSubmit}
+                >
+                  {loading ? (
+                    <ActivityIndicator />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>
+                      {mode === "signin" ? "サインイン" : "メールを認証する"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
 
               {/* Sub actions */}
               <View style={styles.rowBetween}>
