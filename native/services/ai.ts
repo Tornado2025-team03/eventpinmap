@@ -3,6 +3,11 @@
 
 import iconNames from "../constants/lucideIconNames.json";
 
+const DEBUG = (() => {
+  const v = (process.env.EXPO_PUBLIC_DEBUG_AI || "").toString().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+})();
+
 // ---- 共通ヘッダ ----
 function authHeaders() {
   const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -47,6 +52,18 @@ export async function aiFillRemote(text: string): Promise<AiFillResult> {
       headers: authHeaders(),
       body: JSON.stringify({ text, tz, now_iso, locale }),
     });
+    if (DEBUG) {
+      try {
+        const copy = r.clone();
+        const preview = await copy.text();
+        console.log(
+          "[AI] aiFillRemote status=",
+          r.status,
+          "body=",
+          preview.slice(0, 400),
+        );
+      } catch {}
+    }
     if (!r.ok) {
       console.warn("aiFillRemote non-OK:", r.status);
       return null;
@@ -117,6 +134,18 @@ export async function generateTitle(params: {
       headers: authHeaders(),
       body: JSON.stringify(body),
     });
+    if (DEBUG) {
+      try {
+        const copy = res.clone();
+        const preview = await copy.text();
+        console.log(
+          "[AI] generateTitle status=",
+          res.status,
+          "body=",
+          preview.slice(0, 400),
+        );
+      } catch {}
+    }
     if (!res.ok) {
       console.warn("generateTitle non-OK:", res.status);
       return null;
@@ -159,6 +188,18 @@ export async function classifyIconByAI(
       body: JSON.stringify(body),
       signal: opts?.signal,
     });
+    if (DEBUG) {
+      try {
+        const copy = res.clone();
+        const preview = await copy.text();
+        console.log(
+          "[AI] iconPick status=",
+          res.status,
+          "body=",
+          preview.slice(0, 400),
+        );
+      } catch {}
+    }
     if (!res.ok) {
       console.warn("classifyIconByAI non-OK:", res.status);
       return null;
