@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  Button,
   TouchableOpacity,
   Platform,
   Alert,
@@ -12,6 +11,9 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { chip } from "./styles";
 import { MapPicker } from "./MapPicker";
 import { geocodeAddress } from "../../services/geocode";
+import { Card } from "../ui/Card";
+import { SectionLabel } from "../ui/SectionLabel";
+import { PrimaryButton, OutlineButton } from "../ui/Button";
 
 export function Step1(props: {
   title: string;
@@ -37,12 +39,13 @@ export function Step1(props: {
   openPicker: (mode: "date" | "time", target: "start" | "end") => void;
   onChangePicker: (_: any, d?: Date) => void;
   setQuickDate: (k: "today" | "tomorrow" | "weekend") => void;
+  setStartTimeQuick: (h: number, m?: number) => void;
+  setDurationQuick: (hours: number) => void;
   next: () => void;
   canNext1: boolean;
   aiFill: (freeText: string) => Promise<void>;
 }) {
   const {
-    // title, setTitle, suggestedTitle, // title はここでは直接いじらない
     what,
     setWhat,
     when,
@@ -61,6 +64,8 @@ export function Step1(props: {
     openPicker,
     onChangePicker,
     setQuickDate,
+    setStartTimeQuick,
+    setDurationQuick,
     next,
     canNext1,
     aiFill,
@@ -73,27 +78,13 @@ export function Step1(props: {
 
   return (
     <View>
-      {/* AIらくらく入力（カード） */}
-      <View
-        style={{
-          backgroundColor: "#fff",
-          borderRadius: 12,
-          padding: 12,
-          borderWidth: 1,
-          borderColor: "#eee",
-          marginTop: 12,
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 2,
-        }}
-      >
+      <SectionLabel>AI らくらく入力</SectionLabel>
+      <Card>
         <Text style={{ fontWeight: "600", marginBottom: 8 }}>
           思いついたことを、そのまま入力！
         </Text>
         <Text style={{ color: "#666", marginBottom: 8 }}>
-          1文で自由に書くと、AIが下のフォームに自動反映します
+          1行で自由に書くと、AIが下のフォームに自動反映します
         </Text>
         <View style={{ gap: 8 }}>
           <TextInput
@@ -108,7 +99,7 @@ export function Step1(props: {
             value={freeText}
             onChangeText={setFreeText}
           />
-          <Button
+          <PrimaryButton
             title={aiBusy ? "解析中…" : "AIらくらく入力"}
             disabled={aiBusy}
             onPress={async () => {
@@ -135,194 +126,216 @@ export function Step1(props: {
             }}
           />
         </View>
-      </View>
+      </Card>
 
-      {/* 手動入力 */}
-      <Text style={{ fontWeight: "600", marginBottom: 8, marginTop: 16 }}>
-        何をする？
-      </Text>
-      <TextInput
-        style={{
-          height: 48,
-          borderColor: "#ccc",
-          borderWidth: 1,
-          borderRadius: 12,
-          paddingHorizontal: 12,
-        }}
-        placeholder="作品名 など（みんなで決める でもOK）"
-        value={what}
-        onChangeText={setWhat}
-      />
-      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
-        {["アニメ鑑賞会", "バドミントン", "もくもく勉強"].map((l) => (
-          <TouchableOpacity key={l} onPress={() => setWhat(l)} style={chip}>
-            <Text>{l}</Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity
-          onPress={() => setWhat("みんなで決める")}
-          style={chip}
-        >
-          <Text>みんなで決める</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={{ fontWeight: "600", marginTop: 16, marginBottom: 8 }}>
-        いつ？
-      </Text>
-      <View style={{ gap: 8 }}>
-        <Button
-          title={when ? when.toLocaleDateString() : "日付を選択"}
-          onPress={() => openPicker("date", "start")}
-        />
-        <Button
-          title={
-            when
-              ? when.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "開始時間を選択"
-          }
-          onPress={() => openPicker("time", "start")}
-        />
-        <Button
-          title={
-            endAt
-              ? endAt.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "終了時間を選択"
-          }
-          onPress={() => openPicker("time", "end")}
-        />
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {[
-            ["今日", "today"],
-            ["明日", "tomorrow"],
-            ["今週末", "weekend"],
-          ].map(([label, k]) => (
-            <TouchableOpacity
-              key={k}
-              onPress={() => setQuickDate(k as any)}
-              style={chip}
-            >
-              <Text>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {showPicker && (
-          <DateTimePicker
-            value={
-              targetField === "start"
-                ? (when ?? new Date())
-                : (endAt ?? when ?? new Date())
-            }
-            mode={pickerMode}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={onChangePicker}
-          />
-        )}
-
-        {!!formattedStart && (
-          <Text
-            style={{ marginTop: 4 }}
-          >{`選択中: ${formattedStart}${formattedEnd ? ` ~ ${formattedEnd}` : ""}`}</Text>
-        )}
-      </View>
-
-      <Text style={{ fontWeight: "600", marginTop: 16, marginBottom: 8 }}>
-        どこで？
-      </Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <View style={{ height: 12 }} />
+      <SectionLabel>基本情報</SectionLabel>
+      <Card style={{ gap: 8 }}>
+        <Text style={{ fontWeight: "600" }}>何をする？</Text>
         <TextInput
           style={{
-            flex: 1,
             height: 48,
             borderColor: "#ccc",
             borderWidth: 1,
             borderRadius: 12,
             paddingHorizontal: 12,
           }}
-          placeholder="例：渋谷駅周辺 / ○○公園 など"
-          value={where}
-          onChangeText={setWhere}
+          placeholder="作品名など／みんなで決める でもOK"
+          value={what}
+          onChangeText={setWhat}
         />
-        <TouchableOpacity
-          onPress={async () => {
-            const q = (where ?? "").trim();
-            if (q.length < 2) {
-              Alert.alert(
-                "検索ワードが短いです",
-                "2文字以上を入力してください",
-              );
-              return;
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
+          {["アニメ鑑賞会", "バドミントン", "もくもく勉強"].map((l) => (
+            <TouchableOpacity key={l} onPress={() => setWhat(l)} style={chip}>
+              <Text>{l}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            onPress={() => setWhat("みんなで決める")}
+            style={chip}
+          >
+            <Text>みんなで決める</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+
+      <Card style={{ gap: 8 }}>
+        <Text style={{ fontWeight: "600" }}>いつ？</Text>
+        <View style={{ gap: 8 }}>
+          <OutlineButton
+            title={when ? when.toLocaleDateString() : "日付を選択"}
+            onPress={() => openPicker("date", "start")}
+          />
+          <OutlineButton
+            title={
+              when
+                ? when.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "開始時間を選択"
             }
-            setSearching(true);
-            try {
-              const r = await geocodeAddress(q);
-              if (r) {
-                setLatitude(r.latitude);
-                setLongitude(r.longitude);
-                setShowMap(true);
-              } else {
-                Alert.alert(
-                  "見つかりません",
-                  "該当する場所が見つかりませんでした",
-                );
+            onPress={() => openPicker("time", "start")}
+          />
+          <OutlineButton
+            title={
+              endAt
+                ? endAt.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "終了時間を選択"
+            }
+            onPress={() => openPicker("time", "end")}
+          />
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+            {[
+              ["今日", "today"],
+              ["明日", "tomorrow"],
+              ["今週末", "weekend"],
+            ].map(([label, k]) => (
+              <TouchableOpacity
+                key={String(k)}
+                onPress={() => setQuickDate(k as any)}
+                style={chip}
+              >
+                <Text>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* クイック時刻 */}
+          <View
+            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}
+          >
+            {[18, 19, 20, 21].map((h) => (
+              <TouchableOpacity
+                key={h}
+                onPress={() => setStartTimeQuick(h, 0)}
+                style={chip}
+              >
+                <Text>{`${h}:00`}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* 所要時間 */}
+          <View
+            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}
+          >
+            {[
+              ["1時間", 1],
+              ["2時間", 2],
+              ["3時間", 3],
+            ].map(([label, hrs]) => (
+              <TouchableOpacity
+                key={String(hrs)}
+                onPress={() => setDurationQuick(hrs as number)}
+                style={chip}
+              >
+                <Text>{label as string}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {showPicker && (
+            <DateTimePicker
+              value={
+                targetField === "start"
+                  ? (when ?? new Date())
+                  : (endAt ?? when ?? new Date())
               }
-            } catch {
-              Alert.alert("エラー", "検索中にエラーが発生しました");
-            } finally {
-              setSearching(false);
-            }
-          }}
-          disabled={searching}
-          style={{
-            height: 48,
-            paddingHorizontal: 12,
-            backgroundColor: searching ? "#ccc" : "#007aff",
-            borderRadius: 12,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>
-            {searching ? "検索中" : "検索"}
+              mode={pickerMode}
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onChangePicker}
+            />
+          )}
+
+          {!!formattedStart && (
+            <Text style={{ marginTop: 4 }}>{`選択中: ${formattedStart}${
+              formattedEnd ? ` ~ ${formattedEnd}` : ""
+            }`}</Text>
+          )}
+        </View>
+      </Card>
+
+      <Card style={{ gap: 8 }}>
+        <Text style={{ fontWeight: "600" }}>どこで？</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <TextInput
+            style={{
+              flex: 1,
+              height: 48,
+              borderColor: "#ccc",
+              borderWidth: 1,
+              borderRadius: 12,
+              paddingHorizontal: 12,
+            }}
+            placeholder="例：渋谷駅周辺 / ○○公園など"
+            value={where}
+            onChangeText={setWhere}
+          />
+          <PrimaryButton
+            title={searching ? "検索中" : "検索"}
+            disabled={searching}
+            onPress={async () => {
+              const q = (where ?? "").trim();
+              if (q.length < 2) {
+                Alert.alert(
+                  "検索ワードが短いです",
+                  "2文字以上を入力してください",
+                );
+                return;
+              }
+              setSearching(true);
+              try {
+                const r = await geocodeAddress(q);
+                if (r) {
+                  setLatitude(r.latitude);
+                  setLongitude(r.longitude);
+                  setShowMap(true);
+                } else {
+                  Alert.alert(
+                    "見つかりません",
+                    "該当する場所が見つかりませんでした",
+                  );
+                }
+              } catch {
+                Alert.alert("エラー", "検索中にエラーが発生しました");
+              } finally {
+                setSearching(false);
+              }
+            }}
+          />
+        </View>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
+          <TouchableOpacity onPress={() => setShowMap((s) => !s)} style={chip}>
+            <Text>{showMap ? "地図を閉じる" : "地図で選ぶ"}</Text>
+          </TouchableOpacity>
+        </View>
+        {latitude != null && longitude != null && (
+          <Text style={{ marginTop: 4, color: "#555" }}>
+            位置情報: {latitude.toFixed(6)}, {longitude.toFixed(6)}
           </Text>
-        </TouchableOpacity>
-      </View>
+        )}
 
-      {/* 地図で選ぶ */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
-        <TouchableOpacity onPress={() => setShowMap((s) => !s)} style={chip}>
-          <Text>{showMap ? "地図を閉じる" : "地図で選ぶ"}</Text>
-        </TouchableOpacity>
-      </View>
-      {latitude != null && longitude != null && (
-        <Text style={{ marginTop: 4, color: "#555" }}>
-          位置情報: {latitude.toFixed(6)}, {longitude.toFixed(6)}
-        </Text>
-      )}
-
-      {showMap && (
-        <MapPicker
-          value={
-            latitude != null && longitude != null
-              ? { latitude, longitude }
-              : null
-          }
-          onConfirm={(lat, lng) => {
-            setShowMap(false);
-            setLatitude(lat);
-            setLongitude(lng);
-          }}
-          onCancel={() => setShowMap(false)}
-        />
-      )}
+        {showMap && (
+          <MapPicker
+            value={
+              latitude != null && longitude != null
+                ? { latitude, longitude }
+                : null
+            }
+            onConfirm={(lat, lng) => {
+              setShowMap(false);
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+            onCancel={() => setShowMap(false)}
+          />
+        )}
+      </Card>
 
       <View
         style={{
@@ -332,7 +345,7 @@ export function Step1(props: {
           paddingBottom: 30,
         }}
       >
-        <Button title="次へ" onPress={next} disabled={!canNext1} />
+        <PrimaryButton title="次へ" onPress={next} disabled={!canNext1} />
       </View>
     </View>
   );

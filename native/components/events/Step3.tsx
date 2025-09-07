@@ -1,5 +1,8 @@
 import React from "react";
-import { View, Text, Button } from "react-native";
+import { View, Text } from "react-native";
+import { Card } from "../ui/Card";
+import { SectionLabel } from "../ui/SectionLabel";
+import { PrimaryButton, OutlineButton } from "../ui/Button";
 
 export function Step3(props: {
   what: string;
@@ -40,36 +43,30 @@ export function Step3(props: {
 
   return (
     <View>
-      <Text style={{ fontWeight: "600", marginBottom: 8 }}>内容の確認</Text>
-      <View
-        style={{
-          gap: 6,
-          padding: 12,
-          borderWidth: 1,
-          borderColor: "#ddd",
-          borderRadius: 12,
-        }}
-      >
-        <Text>・何を：{what}</Text>
-        <Text>
-          ・いつ：{formattedStart || "未設定"}
-          {formattedEnd ? ` ~ ${formattedEnd}` : ""}
-        </Text>
-        <Text>・どこ：{where}</Text>
-        {latitude != null && longitude != null && (
+      <SectionLabel>内容の確認</SectionLabel>
+      <Card>
+        <View style={{ gap: 6 }}>
+          <Text>・何を：{what}</Text>
           <Text>
-            ・位置情報：{latitude.toFixed(6)}, {longitude.toFixed(6)}
+            ・いつ：{formattedStart || "未設定"}
+            {formattedEnd ? ` ~ ${formattedEnd}` : ""}
           </Text>
-        )}
-        <Text>・タイトル：{title || suggestedTitle}</Text>
-        {tags.length > 0 && (
-          <Text>・雰囲気：{tags.map((t) => `#${t}`).join(" ")}</Text>
-        )}
-        {!!capacity && <Text>・募集人数：{capacity}</Text>}
-        {!!fee && <Text>・参加費：{fee}</Text>}
-        {!!description && <Text>・説明：{description}</Text>}
-        <Text>・参加方法：{rule === "open" ? "誰でも参加OK" : "承認制"}</Text>
-      </View>
+          <Text>・どこ：{where}</Text>
+          {latitude != null && longitude != null && (
+            <Text>
+              ・位置情報：{latitude.toFixed(6)}, {longitude.toFixed(6)}
+            </Text>
+          )}
+          <Text>・タイトル：{title || suggestedTitle}</Text>
+          {tags.length > 0 && (
+            <Text>・雰囲気：{tags.map((t) => `#${t}`).join(" ")}</Text>
+          )}
+          {!!capacity && <Text>・募集人数：{capacity}</Text>}
+          {!!fee && <Text>・参加費：{fee}</Text>}
+          {!!description && <Text>・説明：{description}</Text>}
+          <Text>・参加方法：{rule === "open" ? "誰でも参加OK" : "承認制"}</Text>
+        </View>
+      </Card>
 
       <View
         style={{
@@ -78,8 +75,8 @@ export function Step3(props: {
           marginTop: 16,
         }}
       >
-        <Button title="戻る" onPress={back} />
-        <Button
+        <OutlineButton title="戻る" onPress={back} />
+        <PrimaryButton
           title={publishing ? "投稿中…" : "投稿する"}
           onPress={handlePublish}
           disabled={publishing}

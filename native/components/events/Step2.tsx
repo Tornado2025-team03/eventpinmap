@@ -1,13 +1,9 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  Button,
-  Switch,
-} from "react-native";
+import { View, Text, TouchableOpacity, TextInput, Switch } from "react-native";
 import { chip } from "./styles";
+import { Card } from "../ui/Card";
+import { SectionLabel } from "../ui/SectionLabel";
+import { PrimaryButton, OutlineButton } from "../ui/Button";
 
 export function Step2(props: {
   tags: string[];
@@ -40,112 +36,115 @@ export function Step2(props: {
 
   return (
     <View>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Text style={{ fontWeight: "600" }}>もっと詳しく</Text>
-        <Switch value={addDetailsOpen} onValueChange={setAddDetailsOpen} />
-      </View>
+      <SectionLabel>詳細設定</SectionLabel>
+      <Card>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={{ fontWeight: "600" }}>もっと詳しく</Text>
+          <Switch value={addDetailsOpen} onValueChange={setAddDetailsOpen} />
+        </View>
 
-      {addDetailsOpen && (
-        <>
-          <Text style={{ marginTop: 12 }}>雰囲気タグ（複数選択可）</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {[
-              "初心者歓迎",
-              "10代",
-              "20代",
-              "30代以上",
-              "年齢不問",
-              "男子会",
-              "女子会",
-              "静かに集中",
-              "飲食持込自由",
-              "ネタバレ配慮",
-              "初見歓迎",
-            ].map((t) => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => toggleTag(t)}
-                style={[
-                  chip,
-                  { backgroundColor: tags.includes(t) ? "#cfe" : "#eef" },
-                ]}
-              >
-                <Text>#{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={{ marginTop: 12 }}>募集人数</Text>
-          <View
-            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
-          >
-            {["何人でも", "2~3人", "4~5人", "6人以上"].map((person) => (
-              <TouchableOpacity
-                key={person}
-                onPress={() => setCapacity(person)}
-                style={[
-                  chip,
-                  { backgroundColor: capacity === person ? "#cfe" : "#eef" },
-                ]}
-              >
-                <Text>{person}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={{ marginTop: 12 }}>参加費（円）</Text>
-          <View
-            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
-          >
-            {["未定", "0円", "1000円以下", "1000~2000円", "2000~3000円"].map(
-              (money) => (
+        {addDetailsOpen && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={{ marginTop: 12 }}>雰囲気タグ（複数選択可）</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+              {[
+                "初心者歓迎",
+                "10代",
+                "20代",
+                "30代以上",
+                "年齢不問",
+                "男子会",
+                "女子会",
+                "静かに集中",
+                "飲食持込自由",
+                "ネタバレ配慮",
+                "初見歓迎",
+              ].map((t) => (
                 <TouchableOpacity
-                  key={money}
-                  onPress={() => setFee(money)}
+                  key={t}
+                  onPress={() => toggleTag(t)}
                   style={[
                     chip,
-                    { backgroundColor: fee === money ? "#cfe" : "#eef" },
+                    { backgroundColor: tags.includes(t) ? "#cfe" : "#eef" },
                   ]}
                 >
-                  <Text>{money}</Text>
+                  <Text>#{t}</Text>
                 </TouchableOpacity>
-              ),
-            )}
-          </View>
+              ))}
+            </View>
 
-          <Text style={{ marginTop: 12 }}>説明</Text>
-          <TextInput
-            placeholder="例：好きなお菓子。手ぶらでOKも選べます"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            style={{
-              height: 90,
-              borderColor: "#ccc",
-              borderWidth: 1,
-              borderRadius: 12,
-              padding: 12,
-            }}
-          />
-
-          <View
-            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
-          >
-            <TouchableOpacity
-              onPress={() => setDescription("手ぶらでOK！")}
-              style={chip}
+            <Text style={{ marginTop: 12 }}>募集人数</Text>
+            <View
+              style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
             >
-              <Text>手ぶらでOK！</Text>
-            </TouchableOpacity>
+              {["何人でも", "2~3人", "4~5人", "6人以上"].map((person) => (
+                <TouchableOpacity
+                  key={person}
+                  onPress={() => setCapacity(person)}
+                  style={[
+                    chip,
+                    { backgroundColor: capacity === person ? "#cfe" : "#eef" },
+                  ]}
+                >
+                  <Text>{person}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={{ marginTop: 12 }}>参加費（円）</Text>
+            <View
+              style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
+            >
+              {["未定", "0円", "1000円以下", "1000~2000円", "2000~3000円"].map(
+                (money) => (
+                  <TouchableOpacity
+                    key={money}
+                    onPress={() => setFee(money)}
+                    style={[
+                      chip,
+                      { backgroundColor: fee === money ? "#cfe" : "#eef" },
+                    ]}
+                  >
+                    <Text>{money}</Text>
+                  </TouchableOpacity>
+                ),
+              )}
+            </View>
+
+            <Text style={{ marginTop: 12 }}>説明</Text>
+            <TextInput
+              placeholder="例：好きなお菓子。手ぶらでOKも選べます"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              style={{
+                height: 90,
+                borderColor: "#ccc",
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 12,
+              }}
+            />
+
+            <View
+              style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
+            >
+              <TouchableOpacity
+                onPress={() => setDescription("手ぶらでOKです")}
+                style={chip}
+              >
+                <Text>手ぶらでOK！</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </>
-      )}
+        )}
+      </Card>
 
       <View
         style={{
@@ -155,8 +154,8 @@ export function Step2(props: {
           paddingBottom: 30,
         }}
       >
-        <Button title="戻る" onPress={back} />
-        <Button title="次へ" onPress={next} />
+        <OutlineButton title="戻る" onPress={back} />
+        <PrimaryButton title="次へ" onPress={next} />
       </View>
     </View>
   );

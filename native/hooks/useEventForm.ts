@@ -105,12 +105,31 @@ export function useEventForm() {
     if (targetField === "start") {
       const nextStart = mergeDateOrTime(when, selected, pickerMode);
       setWhen(nextStart);
-      if (endAt && nextStart && endAt < nextStart) {
-        const fixed = new Date(nextStart.getTime() + 60 * 60 * 1000);
-        setEndAt(fixed);
+      // 終了は常に開始と同じ日付に合わせる
+      if (endAt) {
+        const sameDayEnd = new Date(nextStart);
+        sameDayEnd.setHours(endAt.getHours(), endAt.getMinutes(), 0, 0);
+        let adjusted = sameDayEnd;
+        if (adjusted < nextStart) {
+          adjusted = new Date(nextStart.getTime() + 60 * 60 * 1000);
+        }
+        setEndAt(adjusted);
+      } else {
+        // デフォルト所要時間: 2時間（UX向上）
+        const defaultEnd = new Date(nextStart.getTime() + 2 * 60 * 60 * 1000);
+        // 同日内にクランプ
+        if (
+          defaultEnd.getFullYear() !== nextStart.getFullYear() ||
+          defaultEnd.getMonth() !== nextStart.getMonth() ||
+          defaultEnd.getDate() !== nextStart.getDate()
+        ) {
+          defaultEnd.setHours(23, 59, 0, 0);
+        }
+        setEndAt(defaultEnd);
       }
     } else {
-      const base = endAt ?? when ?? new Date();
+      // 終了時間のベースは開始日の同日固定
+      const base = when ?? new Date();
       const nextEnd = mergeDateOrTime(base, selected, pickerMode);
       if (when && nextEnd < when) {
         Alert.alert(
@@ -119,7 +138,21 @@ export function useEventForm() {
         );
         return;
       }
-      setEndAt(nextEnd);
+      // 同日内にクランプ
+      if (
+        when &&
+        (nextEnd.getFullYear() !== when.getFullYear() ||
+          nextEnd.getMonth() !== when.getMonth() ||
+          nextEnd.getDate() !== when.getDate())
+      ) {
+        const clamped = new Date(when);
+        clamped.setHours(nextEnd.getHours(), nextEnd.getMinutes(), 0, 0);
+        setEndAt(
+          clamped < when ? new Date(when.getTime() + 60 * 60 * 1000) : clamped,
+        );
+      } else {
+        setEndAt(nextEnd);
+      }
     }
   };
 
@@ -172,7 +205,59 @@ export function useEventForm() {
     );
 
   const setQuickDate = (kind: "today" | "tomorrow" | "weekend") => {
-    setWhen(quickDate(kind));
+    const start = quickDate(kind);
+    setWhen(start);
+    // デフォルト 2時間、同日クランプ
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    if (
+      end.getFullYear() !== start.getFullYear() ||
+      end.getMonth() !== start.getMonth() ||
+      end.getDate() !== start.getDate()
+    ) {
+      end.setHours(23, 59, 0, 0);
+    }
+    setEndAt(end);
+  };
+
+  const setStartTimeQuick = (hour: number, minute = 0) => {
+    const base = when ?? new Date();
+    const start = new Date(base);
+    start.setHours(hour, minute, 0, 0);
+    setWhen(start);
+    if (endAt) {
+      const sameDayEnd = new Date(start);
+      sameDayEnd.setHours(endAt.getHours(), endAt.getMinutes(), 0, 0);
+      setEndAt(
+        sameDayEnd < start
+          ? new Date(start.getTime() + 60 * 60 * 1000)
+          : sameDayEnd,
+      );
+    } else {
+      const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+      if (
+        end.getFullYear() !== start.getFullYear() ||
+        end.getMonth() !== start.getMonth() ||
+        end.getDate() !== start.getDate()
+      ) {
+        end.setHours(23, 59, 0, 0);
+      }
+      setEndAt(end);
+    }
+  };
+
+  const setDurationQuick = (hours: number) => {
+    if (!when) return;
+    const end = new Date(when);
+    end.setHours(when.getHours() + hours, when.getMinutes(), 0, 0);
+    if (
+      end.getFullYear() !== when.getFullYear() ||
+      end.getMonth() !== when.getMonth() ||
+      end.getDate() !== when.getDate()
+    ) {
+      // 日付を跨ぐ場合は23:59にクランプ
+      end.setHours(23, 59, 0, 0);
+    }
+    setEndAt(end < when ? new Date(when.getTime() + 60 * 60 * 1000) : end);
   };
 
   const handlePublish = async () => {
@@ -318,6 +403,8 @@ export function useEventForm() {
     openPicker,
     onChangePicker,
     setQuickDate,
+    setStartTimeQuick,
+    setDurationQuick,
     handlePublish,
     // AI free text helper
     async aiFill(freeText: string) {
@@ -335,13 +422,33 @@ export function useEventForm() {
           setWhat(newWhat ?? "");
           setWhere(newWhere ?? "");
           setWhen(newWhen);
-          setEndAt(newEnd);
-          setLatitude(
-            typeof remote.latitude === "number" ? remote.latitude : null,
-          );
-          setLongitude(
-            typeof remote.longitude === "number" ? remote.longitude : null,
-          );
+          if (newWhen) {
+            const sameDay = new Date(newWhen);
+            if (newEnd) {
+              sameDay.setHours(newEnd.getHours(), newEnd.getMinutes(), 0, 0);
+            } else {
+              sameDay.setHours(
+                sameDay.getHours() + 2,
+                sameDay.getMinutes(),
+                0,
+                0,
+              );
+            }
+            if (
+              sameDay.getFullYear() !== newWhen.getFullYear() ||
+              sameDay.getMonth() !== newWhen.getMonth() ||
+              sameDay.getDate() !== newWhen.getDate()
+            ) {
+              sameDay.setHours(23, 59, 0, 0);
+            }
+            setEndAt(
+              sameDay < newWhen
+                ? new Date(newWhen.getTime() + 60 * 60 * 1000)
+                : sameDay,
+            );
+          } else {
+            setEndAt(newEnd ?? null);
+          }
           const t = await generateTitle({
             what: newWhat ?? "",
             when: newWhen,
@@ -363,11 +470,33 @@ export function useEventForm() {
         setWhat(newWhat ?? "");
         setWhere(newWhere ?? "");
         setWhen(newWhen);
-        setEndAt(newEnd);
-        setLatitude(typeof local.latitude === "number" ? local.latitude : null);
-        setLongitude(
-          typeof local.longitude === "number" ? local.longitude : null,
-        );
+        if (newWhen) {
+          const sameDay = new Date(newWhen);
+          if (newEnd) {
+            sameDay.setHours(newEnd.getHours(), newEnd.getMinutes(), 0, 0);
+          } else {
+            sameDay.setHours(
+              sameDay.getHours() + 2,
+              sameDay.getMinutes(),
+              0,
+              0,
+            );
+          }
+          if (
+            sameDay.getFullYear() !== newWhen.getFullYear() ||
+            sameDay.getMonth() !== newWhen.getMonth() ||
+            sameDay.getDate() !== newWhen.getDate()
+          ) {
+            sameDay.setHours(23, 59, 0, 0);
+          }
+          setEndAt(
+            sameDay < newWhen
+              ? new Date(newWhen.getTime() + 60 * 60 * 1000)
+              : sameDay,
+          );
+        } else {
+          setEndAt(newEnd ?? null);
+        }
         const t = await generateTitle({
           what: newWhat ?? "",
           when: newWhen,
@@ -397,7 +526,7 @@ export function useEventForm() {
     async setCoordinatesAndReverseGeocode(lat: number, lng: number) {
       setLatitude(lat);
       setLongitude(lng);
-      // 可能なら逆ジオコーディングで "where" を補完
+      // 可能ならリバースジオコーディングで "where" を補完
       try {
         const addr = await reverseGeocode({ latitude: lat, longitude: lng });
         if (addr) setWhere(addr);
