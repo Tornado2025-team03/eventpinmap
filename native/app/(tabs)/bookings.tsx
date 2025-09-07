@@ -1,6 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -12,8 +13,13 @@ import {
 } from "react-native";
 import { supabase } from "../../lib/supabase";
 
-// --- Supabase用 型定義 ---
-export type Event = {
+// --- 型定義 ---
+type Tag = {
+  id: string;
+  name: string;
+};
+
+type Event = {
   id: string;
   name: string;
   description: string;
@@ -21,16 +27,20 @@ export type Event = {
   start_at: string;
   end_at: string;
   status: string;
+  capacity: string | null;
+  fee: string | null;
+  event_tags: { tags: Tag | null }[];
 };
 
-export type EventMember = {
+type EventMember = {
   id: string;
   user_id: string;
   event_id: string;
   role: string;
+  event: Event | null;
 };
 
-export type Announcement = {
+type Announcement = {
   id: string;
   event_id: string;
   user_id: string;
@@ -39,18 +49,16 @@ export type Announcement = {
 };
 
 // --- Supabaseからデータ取得・更新する関数 ---
-export async function fetchEventMembersWithEvents(userId: string) {
-  // event_membersから自分の参加・招待情報を取得
+async function fetchEventMembersWithEvents(userId: string) {
   const { data: members, error: memberError } = await supabase
     .from("event_members")
-    .select("*, event:events(*)")
+    .select("*, event:events(*, event_tags(tags(*)))")
     .eq("user_id", userId);
   if (memberError) throw memberError;
-  // event:events(*)でイベント詳細も同時取得
   return members || [];
 }
 
-export async function updateEventMemberRole(id: string, newRole: string) {
+async function updateEventMemberRole(id: string, newRole: string) {
   const { error } = await supabase
     .from("event_members")
     .update({ role: newRole })
@@ -58,14 +66,12 @@ export async function updateEventMemberRole(id: string, newRole: string) {
   if (error) throw error;
 }
 
-export async function deleteEventMember(id: string) {
+async function deleteEventMember(id: string) {
   const { error } = await supabase.from("event_members").delete().eq("id", id);
   if (error) throw error;
 }
 
-export async function fetchAnnouncements(
-  eventId: string,
-): Promise<Announcement[]> {
+async function fetchAnnouncements(eventId: string): Promise<Announcement[]> {
   const { data, error } = await supabase
     .from("announcements")
     .select("*")
@@ -80,15 +86,16 @@ export default function BookingsScreen() {
   const [activeTab, setActiveTab] = useState<"bookings" | "invites">(
     "bookings",
   );
-  const [bookings, setBookings] = useState<any[]>([]); // 予約済み
-  const [invites, setInvites] = useState<any[]>([]); // 招待
+  const [bookings, setBookings] = useState<EventMember[]>([]);
+  const [invites, setInvites] = useState<EventMember[]>([]);
   const [notice, setNotice] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // ユーザーID取得
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getUser();
       if (data?.user?.id) setUserId(data.user.id);
     })();
   }, []);
@@ -99,41 +106,38 @@ export default function BookingsScreen() {
       if (!userId) return;
       let isActive = true;
       (async () => {
+        setLoading(true);
         try {
           const members = await fetchEventMembersWithEvents(userId);
+          if (!isActive) return;
+
           const now = new Date();
-          const valid = members.filter((m: any) => {
+          const validMembers = members.filter((m) => {
+            if (!m.event) return false;
             const end = new Date(m.event.end_at);
             return end > now;
           });
-          if (isActive) {
-            // 開始日時が早い順にソート
-            const bookingsList = valid
-              .filter(
-                (m: any) => m.role === "organizer" || m.role === "participant",
-              )
-              .map((m: any) => ({ ...m.event, memberId: m.id }))
-              .sort(
-                (a: any, b: any) =>
-                  new Date(a.start_at).getTime() -
-                  new Date(b.start_at).getTime(),
-              );
-            const invitesList = valid
-              .filter((m: any) => m.role === "invited")
-              .map((m: any) => ({ ...m.event, memberId: m.id }))
-              .sort(
-                (a: any, b: any) =>
-                  new Date(a.start_at).getTime() -
-                  new Date(b.start_at).getTime(),
-              );
-            setBookings(bookingsList);
-            setInvites(invitesList);
-          }
+
+          const bookingsList = validMembers
+            .filter((m) => m.role === "organizer" || m.role === "participant")
+            .sort(
+              (a, b) =>
+                new Date(a.event!.start_at).getTime() -
+                new Date(b.event!.start_at).getTime(),
+            );
+          const invitesList = validMembers
+            .filter((m) => m.role === "invited")
+            .sort(
+              (a, b) =>
+                new Date(a.event!.start_at).getTime() -
+                new Date(b.event!.start_at).getTime(),
+            );
+          setBookings(bookingsList);
+          setInvites(invitesList);
         } catch (e) {
-          if (isActive) {
-            setBookings([]);
-            setInvites([]);
-          }
+          if (e instanceof Error) Alert.alert("エラー", e.message);
+        } finally {
+          if (isActive) setLoading(false);
         }
       })();
       return () => {
@@ -151,20 +155,22 @@ export default function BookingsScreen() {
     (async () => {
       try {
         const ann = await fetchAnnouncements(selectedId);
-        setNotice(ann.length > 0 ? ann[0].comment : "");
+        setNotice(
+          ann.length > 0 ? ann[0].comment : "まだお知らせはありません。",
+        );
       } catch {
-        setNotice("");
+        setNotice("お知らせの取得に失敗しました。");
       }
     })();
   }, [selectedId]);
 
-  // タブごとに表示するリストを切り替え
   const eventList = activeTab === "bookings" ? bookings : invites;
-  const selectedBooking = eventList.find((b) => b.id === selectedId);
+  const selectedItem = eventList.find((item) => item.event?.id === selectedId);
+  const selectedEvent = selectedItem?.event;
 
   // 予約を取り消す
   const handleCancelBooking = () => {
-    if (!selectedBooking) return;
+    if (!selectedItem) return;
     Alert.alert(
       "予約を取り消しますか？",
       "本当にこのイベントの予約を取り消しますか？",
@@ -175,10 +181,12 @@ export default function BookingsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteEventMember(selectedBooking.memberId);
-              setBookings(bookings.filter((b) => b.id !== selectedBooking.id));
+              await deleteEventMember(selectedItem.id);
+              setBookings(bookings.filter((b) => b.id !== selectedItem.id));
               setSelectedId(null);
-            } catch {}
+            } catch (e) {
+              if (e instanceof Error) Alert.alert("エラー", e.message);
+            }
           },
         },
       ],
@@ -187,42 +195,58 @@ export default function BookingsScreen() {
 
   // 招待イベントに「参加」
   const handleAcceptInvite = () => {
-    if (!selectedBooking) return;
+    if (!selectedItem) return;
     (async () => {
       try {
-        await updateEventMemberRole(selectedBooking.memberId, "participant");
-        setInvites(invites.filter((b) => b.id !== selectedBooking.id));
-        setBookings([...bookings, selectedBooking]);
+        await updateEventMemberRole(selectedItem.id, "participant");
+        const acceptedInvite = invites.find((i) => i.id === selectedItem.id);
+        if (acceptedInvite) {
+          setInvites(invites.filter((i) => i.id !== selectedItem.id));
+          setBookings([
+            ...bookings,
+            { ...acceptedInvite, role: "participant" },
+          ]);
+        }
         setSelectedId(null);
-      } catch {}
+      } catch (e) {
+        if (e instanceof Error) Alert.alert("エラー", e.message);
+      }
     })();
   };
 
   // 招待イベントに「不参加」
   const handleDeclineInvite = () => {
-    if (!selectedBooking) return;
+    if (!selectedItem) return;
     (async () => {
       try {
-        await deleteEventMember(selectedBooking.memberId);
-        setInvites(invites.filter((b) => b.id !== selectedBooking.id));
+        await deleteEventMember(selectedItem.id);
+        setInvites(invites.filter((i) => i.id !== selectedItem.id));
         setSelectedId(null);
-      } catch {}
+      } catch (e) {
+        if (e instanceof Error) Alert.alert("エラー", e.message);
+      }
     })();
   };
 
+  if (loading) {
+    return (
+      <ActivityIndicator
+        size="large"
+        style={{ flex: 1, justifyContent: "center" }}
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* タブ切り替え */}
+      {/* Tab Navigation */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[
             styles.tabButton,
             activeTab === "bookings" && styles.tabActive,
           ]}
-          onPress={() => {
-            setActiveTab("bookings");
-            setSelectedId(null);
-          }}
+          onPress={() => setActiveTab("bookings")}
         >
           <Text
             style={[
@@ -230,7 +254,7 @@ export default function BookingsScreen() {
               activeTab === "bookings" && styles.tabTextActive,
             ]}
           >
-            予約済み
+            予約済み ({bookings.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -238,10 +262,7 @@ export default function BookingsScreen() {
             styles.tabButton,
             activeTab === "invites" && styles.tabActive,
           ]}
-          onPress={() => {
-            setActiveTab("invites");
-            setSelectedId(null);
-          }}
+          onPress={() => setActiveTab("invites")}
         >
           <Text
             style={[
@@ -249,12 +270,12 @@ export default function BookingsScreen() {
               activeTab === "invites" && styles.tabTextActive,
             ]}
           >
-            招待
+            招待 ({invites.length})
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* リスト表示 */}
+      {/* Event List */}
       {eventList.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
@@ -265,47 +286,40 @@ export default function BookingsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.listContainer}>
-          {eventList.map((booking) => {
-            const isSelected = selectedId === booking.id;
-            // 日付フォーマット: 開始時間: YYYY-MM-DD HH:mm, 終了時間: YYYY-MM-DD HH:mm
-            const start = new Date(booking.start_at);
-            const end = new Date(booking.end_at);
+          {eventList.map((item) => {
+            if (!item.event) return null;
+            const { event } = item;
+            const start = new Date(event.start_at);
+            const end = new Date(event.end_at);
             const now = new Date();
             const pad = (n: number) => n.toString().padStart(2, "0");
             const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())} ${pad(start.getHours())}:${pad(start.getMinutes())}`;
             const endStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())} ${pad(end.getHours())}:${pad(end.getMinutes())}`;
-            // 開催中判定: 現在時刻が開始以上・終了未満
             const isOngoing = now >= start && now < end;
+
             return (
               <TouchableOpacity
-                key={booking.id}
-                style={[
-                  styles.card,
-                  isSelected && styles.selectedCard,
-                  isOngoing && styles.openCard,
-                ]}
+                key={item.id}
+                style={[styles.card, isOngoing && styles.openCard]}
                 activeOpacity={0.8}
-                onPress={() => setSelectedId(booking.id)}
+                onPress={() => setSelectedId(event.id)}
               >
-                {/* 開催中ポップ */}
                 {isOngoing && (
                   <View style={styles.openPop}>
                     <Text style={styles.openPopText}>開催中！</Text>
                   </View>
                 )}
-                <Text style={styles.cardTitle}>{booking.name}</Text>
-                <Text style={styles.cardDate}>開始時間: {startStr}</Text>
-                <Text style={styles.cardDate}>終了時間: {endStr}</Text>
-                <Text style={styles.cardlocation}>
-                  場所: {booking.location}
-                </Text>
+                <Text style={styles.cardTitle}>{event.name}</Text>
+                <Text style={styles.cardDate}>開始: {startStr}</Text>
+                <Text style={styles.cardDate}>終了: {endStr}</Text>
+                <Text style={styles.cardlocation}>場所: {event.location}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       )}
 
-      {/* 詳細表示 */}
+      {/* Event Detail Modal */}
       <Modal
         visible={selectedId !== null}
         transparent
@@ -316,42 +330,47 @@ export default function BookingsScreen() {
           style={styles.modalOverlay}
           onPress={() => setSelectedId(null)}
         >
-          <View style={styles.modalContent}>
-            {selectedBooking && (
+          <Pressable style={styles.modalContent}>
+            {selectedEvent && (
               <>
-                <Text style={styles.modalTitle}>{selectedBooking.name}</Text>
+                <Text style={styles.modalTitle}>{selectedEvent.name}</Text>
                 {(() => {
-                  const start = new Date(selectedBooking.start_at);
-                  const end = new Date(selectedBooking.end_at);
+                  const start = new Date(selectedEvent.start_at);
+                  const end = new Date(selectedEvent.end_at);
                   const pad = (n: number) => n.toString().padStart(2, "0");
                   const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())} ${pad(start.getHours())}:${pad(start.getMinutes())}`;
                   const endStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())} ${pad(end.getHours())}:${pad(end.getMinutes())}`;
                   return (
                     <>
-                      <Text style={styles.modalItem}>開始日時: {startStr}</Text>
-                      <Text style={styles.modalItem}>終了日時: {endStr}</Text>
+                      <Text style={styles.modalItem}>開始: {startStr}</Text>
+                      <Text style={styles.modalItem}>終了: {endStr}</Text>
                     </>
                   );
                 })()}
                 <Text style={styles.modalItem}>
-                  場所: {selectedBooking.location}
+                  場所: {selectedEvent.location}
                 </Text>
                 <View style={styles.modalDivider} />
-                {(() => {
-                  const lines = selectedBooking.description.split(/\r?\n/);
-                  return lines.map((line: string, idx: number) => (
-                    <Text style={styles.modalItem} key={idx}>
-                      {idx === 0 ? `説明: ${line}` : line}
-                    </Text>
-                  ));
-                })()}
-                <View style={{ height: 8 }} />
-                <Text style={styles.modalNoticeTitle}>お知らせ</Text>
-                <Text style={styles.modalNotice}>
-                  {notice ? notice : "お知らせはありません"}
+                <Text style={styles.modalItem}>
+                  説明: {selectedEvent.description}
                 </Text>
 
-                {/* ボタン群 */}
+                {/* Tags, Capacity, Fee */}
+                <View style={styles.tagContainer}>
+                  {selectedEvent.event_tags?.map(({ tags }) =>
+                    tags ? (
+                      <View key={tags.id} style={styles.tag}>
+                        <Text style={styles.tagText}>#{tags.name}</Text>
+                      </View>
+                    ) : null,
+                  )}
+                </View>
+
+                <View style={styles.modalDivider} />
+                <Text style={styles.modalNoticeTitle}>お知らせ</Text>
+                <Text style={styles.modalNotice}>{notice}</Text>
+
+                {/* Action Buttons */}
                 {activeTab === "bookings" ? (
                   <TouchableOpacity
                     style={styles.cancelButton}
@@ -377,7 +396,7 @@ export default function BookingsScreen() {
                 )}
               </>
             )}
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -385,6 +404,29 @@ export default function BookingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  modalDivider: {
+    height: 1,
+    backgroundColor: "#eee",
+    marginVertical: 12,
+  },
+  tagContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  tag: {
+    backgroundColor: "#E3F2FD",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  tagText: {
+    color: "#2196F3",
+    fontSize: 14,
+  },
   modalNoticeTitle: {
     fontSize: 15,
     fontWeight: "bold",
@@ -461,13 +503,6 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 4,
   },
-  cardStatus: {
-    fontSize: 15,
-    color: "#2196F3",
-    fontWeight: "bold",
-    marginBottom: 4,
-    textAlign: "right",
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -519,10 +554,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 13,
   },
-  selectedCard: {
-    borderColor: "#2196F3",
-    backgroundColor: "#E3F2FD",
-  },
   cardTitle: {
     fontSize: 20,
     fontWeight: "bold",
@@ -532,13 +563,7 @@ const styles = StyleSheet.create({
   cardDate: {
     fontSize: 16,
     color: "#666",
-    marginBottom: 12,
-  },
-  detailLink: {
-    fontSize: 16,
-    color: "#2196F3",
-    textAlign: "right",
-    marginTop: 8,
+    marginBottom: 4,
   },
   modalOverlay: {
     flex: 1,
@@ -550,7 +575,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 28,
-    minWidth: 280,
+    minWidth: 320,
     marginHorizontal: 24,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -569,16 +594,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#222",
     marginBottom: 8,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: "#eee",
-    marginVertical: 12,
-  },
-  modalHint: {
-    fontSize: 14,
-    color: "#2196F3",
-    marginTop: 16,
-    textAlign: "center",
   },
 });
