@@ -1,4 +1,3 @@
-// App.tsx
 import React, {
   useCallback,
   useEffect,
@@ -21,8 +20,10 @@ import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
 import { useLocalSearchParams } from "expo-router";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 type LatLng = { latitude: number; longitude: number };
+type Tag = { id: string; name: string };
 type EventRow = {
   id: string;
   name: string;
@@ -33,6 +34,7 @@ type EventRow = {
   start_at?: string | null;
   end_at?: string | null;
   updated_at?: string | null;
+  event_tags?: { tag?: Tag }[];
 };
 type Pin = LatLng & {
   id: string;
@@ -41,6 +43,7 @@ type Pin = LatLng & {
   location?: string;
   start_at?: string | null;
   end_at?: string | null;
+  tags?: Tag[];
 };
 
 export default function App() {
@@ -60,17 +63,108 @@ export default function App() {
   // 現在地・リージョン
   const [region, setRegion] = useState<Region | null>(null);
   const [myCoord, setMyCoord] = useState<LatLng | null>(null);
-
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const watchRef = useRef<Location.LocationSubscription | null>(null);
-
+  const [tagModalVisible, setTagModalVisible] = useState(false);
   // イベント（ピン）
   const [pins, setPins] = useState<Pin[]>([]);
   const [loadingPins, setLoadingPins] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+  const allTags = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          pins.flatMap((p) => p.tags ?? []).map((tag) => [tag.id, tag]),
+        ).values(),
+      ),
+    [pins],
+  );
 
+  const filteredPins = useMemo(() => {
+    if (!selectedTags.length) return pins;
+    return pins.filter((p) =>
+      p.tags?.some((t) => selectedTags.some((sel) => sel.id === t.id)),
+    );
+  }, [pins, selectedTags]);
   // モーダルの対象
   const [selectedEvent, setSelectedEvent] = useState<Pin | null>(null);
+  const [dropPinModal, setDropPinModal] = useState<{
+    visible: boolean;
+    coord: LatLng | null;
+  }>(() => ({ visible: false, coord: null }));
 
+  const [pinStartAt, setPinStartAt] = useState<Date | null>(null);
+  const [pinEndAt, setPinEndAt] = useState<Date | null>(null);
+
+  const [androidPicker, setAndroidPicker] = useState<{
+    type: "start" | "end";
+    mode: "date" | "time";
+    show: boolean;
+    tempDate: Date | null;
+  } | null>(null);
+
+  const [myAvailablePin, setMyAvailablePin] = useState<{
+    coord: LatLng;
+    startAt: Date;
+    endAt: Date;
+  } | null>(null);
+
+  async function setUserStatusAvailable(
+    coord: { latitude: number; longitude: number },
+    startAt: Date,
+    endAt: Date | null,
+  ) {
+    const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+    const userId = user?.data?.user?.id;
+    if (!userId) {
+      Alert.alert("ログインしてください");
+      return;
+    }
+    const { error } = await supabase.from("user_statuses").upsert(
+      {
+        user_id: userId,
+        status: "available",
+        latitude: coord.latitude,
+        longitude: coord.longitude,
+        start_at: startAt.toISOString(),
+        end_at: endAt ? endAt.toISOString() : null,
+      },
+      { onConflict: "user_id" },
+    );
+
+    if (error) {
+      Alert.alert("ステータス更新エラー", error.message);
+      return;
+    }
+    setMyAvailablePin(endAt ? { coord, startAt, endAt } : null);
+    Alert.alert("ステータスを「available」にしました！");
+  }
+
+  async function setUserStatusHidden() {
+    const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+    const userId = user?.data?.user?.id;
+    if (!userId) {
+      Alert.alert("ログインしてください");
+      return;
+    }
+    const { error } = await supabase.from("user_statuses").upsert(
+      {
+        user_id: userId,
+        status: "hidden",
+        latitude: null,
+        longitude: null,
+        start_at: new Date().toISOString(),
+        end_at: null,
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) {
+      Alert.alert("ステータス更新エラー", error.message);
+      return;
+    }
+    setMyAvailablePin(null);
+    Alert.alert("ステータスを「hidden」にしました");
+  }
   // Row → Pin 変換
   const rowToPin = useCallback((r: EventRow): Pin | null => {
     const lat = r.latitude != null ? Number(r.latitude) : NaN;
@@ -85,6 +179,7 @@ export default function App() {
       end_at: r.end_at ?? null,
       latitude: lat,
       longitude: lng,
+      tags: (r.event_tags?.map((et) => et.tag).filter(Boolean) as Tag[]) ?? [],
     };
   }, []);
 
@@ -122,7 +217,14 @@ export default function App() {
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, name, description, location, latitude, longitude, start_at, end_at, updated_at",
+        `
+        id, name, description, location, latitude, longitude, start_at, end_at, updated_at,
+        event_tags (
+          tag:tags (
+            id, name
+          )
+        )
+      `,
       )
       .order("start_at", { ascending: true });
 
@@ -133,7 +235,17 @@ export default function App() {
     }
 
     const now = new Date();
-    const clean: Pin[] = (data ?? []).map(rowToPin).filter((p): p is Pin => {
+    // Fix event_tags structure to match EventRow type
+    const normalizedData = (data ?? []).map((row: any) => {
+      // event_tags may be [{ tag: [{ id, name }, ...] }] instead of [{ tag: { id, name } }]
+      if (Array.isArray(row.event_tags)) {
+        row.event_tags = row.event_tags.flatMap((et: any) =>
+          Array.isArray(et.tag) ? et.tag.map((tag: any) => ({ tag })) : [et],
+        );
+      }
+      return row;
+    });
+    const clean: Pin[] = normalizedData.map(rowToPin).filter((p): p is Pin => {
       if (!p) return false;
       const isFuture = !p.end_at || new Date(p.end_at) > now;
       return isFuture;
@@ -159,7 +271,6 @@ export default function App() {
           if (!row) return;
           const pin = rowToPin(row);
 
-          // ...inside the postgres_changes handler...
           setPins((prev) => {
             const now = new Date();
             let next: Pin[];
@@ -186,7 +297,6 @@ export default function App() {
             return next.filter((p) => !p.end_at || new Date(p.end_at) > now);
           });
 
-          // モーダル表示中なら内容も同期
           setSelectedEvent((prev) =>
             prev && prev.id === String(row.id) && pin
               ? { ...prev, ...pin }
@@ -224,10 +334,10 @@ export default function App() {
       {
         latitude: pin.latitude,
         longitude: pin.longitude,
-        latitudeDelta: 0.1, // smaller value = more zoom
+        latitudeDelta: 0.1,
         longitudeDelta: 0.1,
       },
-      500, // duration in ms
+      500,
     );
   }, []);
 
@@ -252,6 +362,16 @@ export default function App() {
     Linking.openURL(url).catch(() => {});
   }, []);
 
+  const handleMapLongPress = useCallback(
+    (e: { nativeEvent: { coordinate: LatLng } }) => {
+      setDropPinModal({ visible: true, coord: e.nativeEvent.coordinate });
+      const now = new Date();
+      setPinStartAt(now);
+      setPinEndAt(new Date(now.getTime() + 60 * 60 * 1000)); // 1 hour later
+    },
+    [],
+  );
+
   if (!region) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -263,6 +383,7 @@ export default function App() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Map */}
       <MapView
         ref={mapRef}
         style={{ flex: 1 }}
@@ -273,24 +394,89 @@ export default function App() {
         showsCompass
         showsScale={Platform.OS === "ios"}
         onRegionChangeComplete={(r) => setRegion(r)}
+        onLongPress={handleMapLongPress}
       >
-        {/* バブルを出さないため、title/descriptionは渡さない */}
+        {/* Existing pins */}
         {!loadingPins &&
-          pins.map((pin) => (
-            <Marker
-              key={pin.id}
-              coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-              pinColor="tomato"
-              onPress={() => handleMarkerPress(pin)}
-              // image={require("../../assets/images/pin.png")}
-            />
-          ))}
+          pins.map((pin) => {
+            const isHighlighted =
+              selectedTags.length > 0 &&
+              pin.tags?.some((t) =>
+                selectedTags.some((sel) => sel.id === t.id),
+              );
+            return (
+              <Marker
+                key={`${pin.id}-${selectedTags.map((t) => t.id).join(",") || "all"}`}
+                coordinate={{
+                  latitude: pin.latitude,
+                  longitude: pin.longitude,
+                }}
+                pinColor={isHighlighted ? "#FFD700" : "tomato"}
+                onPress={() => handleMarkerPress(pin)}
+              />
+            );
+          })}
+
+        {/* Blue pin for user's available status */}
+        {myAvailablePin &&
+          (() => {
+            const now = new Date();
+            if (now >= myAvailablePin.startAt && now <= myAvailablePin.endAt) {
+              return (
+                <Marker
+                  coordinate={myAvailablePin.coord}
+                  pinColor="blue"
+                  title="あなたの利用可能ピン"
+                  onPress={() => {
+                    Alert.alert(
+                      "ステータス変更",
+                      "ステータスを「hidden」にしますか？",
+                      [
+                        { text: "キャンセル", style: "cancel" },
+                        {
+                          text: "OK",
+                          onPress: async () => {
+                            await setUserStatusHidden();
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                />
+              );
+            }
+            return null;
+          })()}
       </MapView>
 
       {/* 右上のツール群 */}
-      <View style={{ position: "absolute", top: 16, right: 16, gap: 8 }}>
+      <View
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
         <RoundBtn label="Refresh" onPress={() => void loadEvents()} />
         <RoundBtn label="中心へ" onPress={recenter} />
+        <TouchableOpacity
+          onPress={() => setTagModalVisible(true)}
+          style={{
+            backgroundColor: "#0A84FF",
+            borderRadius: 32,
+            padding: 16,
+            marginTop: 8,
+            elevation: 4,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 4,
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 24 }}>🔍</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 左下：同期時刻 */}
@@ -311,6 +497,35 @@ export default function App() {
             : "Syncing…"}
         </Text>
       </View>
+
+      {/* Bottom Center Tab Icon */}
+      {/* <View
+        style={{
+          position: "absolute",
+          bottom: 24,
+          left: 0,
+          right: 0,
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => setTagModalVisible(true)}
+          style={{
+            backgroundColor: "#0A84FF",
+            borderRadius: 32,
+            padding: 16,
+            elevation: 4,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 4,
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 24 }}>🏷️</Text>
+        </TouchableOpacity>
+      </View> */}
 
       {/* 詳細モーダル（ピン押下で即表示） */}
       <Modal
@@ -350,6 +565,33 @@ export default function App() {
                 <Text style={{ fontSize: 18, fontWeight: "700" }}>
                   {selectedEvent?.title ?? "Event"}
                 </Text>
+                {selectedEvent?.tags && selectedEvent.tags.length > 0 ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      marginTop: 8,
+                    }}
+                  >
+                    {selectedEvent.tags.map((tag) => (
+                      <View
+                        key={tag.id}
+                        style={{
+                          backgroundColor: "#eee",
+                          borderRadius: 8,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          marginRight: 6,
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, color: "#555" }}>
+                          #{tag.name}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
 
                 {selectedEvent?.location ? (
                   <Text style={{ color: "#666", marginTop: 4 }}>
@@ -406,6 +648,270 @@ export default function App() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Tag Selection Modal */}
+      <Modal
+        visible={tagModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setTagModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setTagModalVisible(false)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.35)",
+              justifyContent: "flex-end",
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: "white",
+                  padding: 16,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  minHeight: 200,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}
+                >
+                  タグで絞り込み
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedTags([]);
+                      setTagModalVisible(false);
+                    }}
+                    style={{
+                      backgroundColor:
+                        selectedTags.length === 0 ? "#0A84FF" : "#eee",
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      marginRight: 6,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: selectedTags.length === 0 ? "white" : "#555",
+                      }}
+                    >
+                      すべて
+                    </Text>
+                  </TouchableOpacity>
+                  {allTags.map((tag) => {
+                    const isSelected = selectedTags.some(
+                      (t) => t.id === tag.id,
+                    );
+                    return (
+                      <TouchableOpacity
+                        key={tag.id}
+                        onPress={() => {
+                          setSelectedTags((prev) =>
+                            isSelected
+                              ? prev.filter((t) => t.id !== tag.id)
+                              : [...prev, tag],
+                          );
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? "#0A84FF" : "#eee",
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          marginRight: 6,
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? "white" : "#555" }}>
+                          #{tag.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={{ alignItems: "flex-end", marginTop: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setTagModalVisible(false)}
+                    style={{
+                      backgroundColor: "#0A84FF",
+                      borderRadius: 8,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontWeight: "700" }}>
+                      閉じる
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ドロップピンモーダル */}
+      <Modal
+        visible={dropPinModal.visible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDropPinModal({ visible: false, coord: null })}
+      >
+        <TouchableWithoutFeedback
+          onPress={() => setDropPinModal({ visible: false, coord: null })}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.35)",
+              justifyContent: "flex-end",
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: "white",
+                  padding: 16,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  minHeight: 220,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}
+                >
+                  ステータスを「available」に変更
+                </Text>
+                <Text>開始時刻</Text>
+                <DateTimeInput
+                  value={pinStartAt}
+                  onChange={setPinStartAt}
+                  onAndroidPress={() => {
+                    setDropPinModal({
+                      visible: false,
+                      coord: dropPinModal.coord,
+                    });
+                    setTimeout(() => {
+                      setAndroidPicker({
+                        type: "start",
+                        mode: "date",
+                        show: true,
+                        tempDate: null,
+                      });
+                    }, 300);
+                  }}
+                  type="start"
+                />
+                <DateTimeInput
+                  value={pinEndAt}
+                  onChange={setPinEndAt}
+                  onAndroidPress={() => {
+                    setDropPinModal({
+                      visible: false,
+                      coord: dropPinModal.coord,
+                    });
+                    setTimeout(() => {
+                      setAndroidPicker({
+                        type: "end",
+                        mode: "date",
+                        show: true,
+                        tempDate: null,
+                      });
+                    }, 300);
+                  }}
+                  type="end"
+                />
+                <View style={{ flexDirection: "row", marginTop: 16, gap: 12 }}>
+                  <ActionBtn
+                    label="キャンセル"
+                    onPress={() =>
+                      setDropPinModal({ visible: false, coord: null })
+                    }
+                  />
+                  <ActionBtn
+                    label="確定"
+                    onPress={async () => {
+                      if (!dropPinModal.coord || !pinStartAt) {
+                        Alert.alert("開始時刻を入力してください");
+                        return;
+                      }
+                      Alert.alert(
+                        "確認",
+                        "この場所で「available」にしますか？",
+                        [
+                          { text: "キャンセル", style: "cancel" },
+                          {
+                            text: "OK",
+                            onPress: async () => {
+                              if (dropPinModal.coord) {
+                                await setUserStatusAvailable(
+                                  dropPinModal.coord,
+                                  pinStartAt,
+                                  pinEndAt,
+                                );
+                                setDropPinModal({
+                                  visible: false,
+                                  coord: null,
+                                });
+                              }
+                            },
+                          },
+                        ],
+                      );
+                    }}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {androidPicker?.show && Platform.OS === "android" && (
+        <DateTimePicker
+          value={
+            androidPicker.tempDate ??
+            (androidPicker.type === "start"
+              ? (pinStartAt ?? new Date())
+              : (pinEndAt ?? new Date()))
+          }
+          mode={androidPicker.mode}
+          display="default"
+          minuteInterval={1}
+          onChange={(_, date) => {
+            if (!date) {
+              setAndroidPicker(null);
+              return;
+            }
+            if (androidPicker.mode === "date") {
+              // After picking date, show time picker
+              setAndroidPicker({
+                ...androidPicker,
+                mode: "time",
+                show: true,
+                tempDate: date,
+              });
+            } else {
+              // Combine date and time
+              const baseDate = androidPicker.tempDate ?? new Date();
+              const finalDate = new Date(baseDate);
+              finalDate.setHours(date.getHours());
+              finalDate.setMinutes(date.getMinutes());
+              finalDate.setSeconds(0);
+              if (androidPicker.type === "start") setPinStartAt(finalDate);
+              else setPinEndAt(finalDate);
+              setAndroidPicker(null);
+              setTimeout(() => {
+                setDropPinModal({ visible: true, coord: dropPinModal.coord });
+              }, 300);
+            }
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -518,4 +1024,62 @@ async function handleParticipate(event: Pin | null) {
     return;
   }
   Alert.alert("参加しました！");
+}
+
+function DateTimeInput({
+  value,
+  onChange,
+  onAndroidPress,
+  type,
+}: {
+  value: Date | null;
+  onChange: (d: Date) => void;
+  onAndroidPress?: () => void;
+  type: "start" | "end";
+}) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => {
+          if (Platform.OS === "android" && onAndroidPress) {
+            onAndroidPress();
+          } else {
+            setShow(true);
+          }
+        }}
+        style={{
+          backgroundColor: "#eee",
+          borderRadius: 8,
+          padding: 8,
+          marginTop: 4,
+        }}
+      >
+        <Text>
+          {value
+            ? value.toLocaleString(undefined, {
+                hour: "2-digit",
+                minute: "2-digit",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              })
+            : "選択してください"}
+        </Text>
+      </TouchableOpacity>
+      {Platform.OS === "ios" && show && (
+        <DateTimePicker
+          value={value ?? new Date()}
+          mode="datetime"
+          display="spinner"
+          minuteInterval={1}
+          onChange={(_, date) => {
+            setShow(false);
+            if (date) onChange(date);
+          }}
+        />
+      )}
+    </>
+  );
 }
