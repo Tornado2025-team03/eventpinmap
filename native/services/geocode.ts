@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import * as Location from "expo-location";
 import type { Coordinates } from "../types/event";
 
@@ -44,7 +43,7 @@ export async function reverseGeocode(
       .filter(Boolean)
       .join(" ");
     return parts || null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

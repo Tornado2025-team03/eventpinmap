@@ -160,7 +160,7 @@ export function useEventForm() {
 
   const suggestedTitle = React.useMemo(() => {
     if (!what && !when) return "";
-    const datePart = when ? when.toLocaleDateString() : "日時未定";
+    // datePart was unused; remove to satisfy lint
     return `『${what}』をする！！`;
   }, [what, when]);
 
@@ -337,7 +337,7 @@ export function useEventForm() {
         } else {
           Alert.alert("見つかりません", "住所から座標を取得できませんでした。");
         }
-      } catch (e: any) {
+      } catch {
         Alert.alert("エラー", "ジオコーディングでエラーが発生しました。");
       }
     },

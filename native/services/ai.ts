@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import iconNames from "../constants/lucideIconNames.json";
 
 const AI_ENDPOINT = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
@@ -38,7 +37,7 @@ export async function classifyIconByAI(
     // normalize e.g., "utensils" -> "Utensils"
     const canonical = normalizeIconName(name);
     return isValidIcon(canonical) ? canonical : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
