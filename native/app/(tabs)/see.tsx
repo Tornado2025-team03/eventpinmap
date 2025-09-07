@@ -1271,16 +1271,30 @@ function DateTimeInput({
         </Text>
       </TouchableOpacity>
       {Platform.OS === "ios" && show && (
-        <DateTimePicker
-          value={value ?? new Date()}
-          mode="datetime"
-          display="spinner"
-          minuteInterval={1}
-          onChange={(_, date) => {
-            setShow(false);
-            if (date) onChange(date);
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 100,
+            backgroundColor: "rgba(255,255,255,0.95)", // 半透明で背景を隠す
           }}
-        />
+        >
+          <DateTimePicker
+            value={value ?? new Date()}
+            mode="datetime"
+            display="spinner"
+            minuteInterval={1}
+            onChange={(_, date) => {
+              setShow(false);
+              if (date) onChange(date);
+            }}
+          />
+        </View>
       )}
     </>
   );
