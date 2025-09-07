@@ -11,8 +11,12 @@ export async function insertEvent(payload: EventInsertPayload) {
   const msg = String((error as any)?.message || "").toLowerCase();
   // Fallback for environments where `icon` column doesn't exist yet.
   if (msg.includes("column") && msg.includes("icon")) {
-    const { icon, ...rest } = (payload as any) || {};
-    const retry = await supabase.from("events").insert(rest).select().single();
+    const { icon, ...rest } = payload;
+    const retry = await supabase
+      .from("events")
+      .insert(rest as Omit<EventInsertPayload, "icon">)
+      .select()
+      .single();
     if (retry.error) throw retry.error;
     return retry.data;
   }
