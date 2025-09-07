@@ -159,22 +159,6 @@ export function Step2(props: {
           </>
         )}
 
-        <Text style={{ marginTop: 12 }}>募集人数</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
-          {["何人でも", "2~3人", "4~5人", "6人以上"].map((person) => (
-            <TouchableOpacity
-              key={person}
-              onPress={() => setCapacity(person)}
-              style={[
-                chip,
-                { backgroundColor: capacity === person ? "#cfe" : "#eef" },
-              ]}
-            >
-              <Text>{person}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         <Text style={{ marginTop: 12 }}>参加費（円）</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
           {["未定", "0円", "1000円以下", "1000~2000円", "2000~3000円"].map(
