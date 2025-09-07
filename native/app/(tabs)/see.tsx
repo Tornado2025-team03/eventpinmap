@@ -746,7 +746,7 @@ export default function App() {
 
                 <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
                   <ActionBtn
-                    label="Directions"
+                    label="経路を見る"
                     onPress={() => {
                       if (selectedEvent) {
                         openDirections(selectedEvent);
@@ -755,7 +755,7 @@ export default function App() {
                     }}
                   />
                   <ActionBtn
-                    label="participate"
+                    label="参加する"
                     onPress={async () => {
                       Alert.alert(
                         "参加確認",
