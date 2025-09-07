@@ -141,7 +141,7 @@ export function useEventForm() {
   const suggestedTitle = React.useMemo(() => {
     if (!what && !when) return "";
     const datePart = when ? when.toLocaleDateString() : "日時未定";
-    return `『${what}』をする会（${datePart}）`;
+    return `『${what}』をする！`;
   }, [what, when]);
 
   const canNext1 = true;
