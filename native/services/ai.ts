@@ -1,3 +1,13 @@
+// 共通のヘッダを作る関数
+function authHeaders() {
+  const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${anon}`,
+    apikey: anon ?? "",
+  };
+}
+
 // Client for LLM-based AI fill (server endpoint)
 export type AiFillRemoteResponse = {
   what?: string;
@@ -25,7 +35,7 @@ export async function aiFillRemote(text: string): Promise<{
 
   const r = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ text, tz, now_iso, locale }),
   });
   if (!r.ok) throw new Error(`AI endpoint error: ${r.status}`);
@@ -82,7 +92,7 @@ export async function generateTitle(params: {
   try {
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
     if (!res.ok) return null;
@@ -91,7 +101,8 @@ export async function generateTitle(params: {
       .toString()
       .trim();
     return t || null;
-  } catch {
+  } catch (e) {
+    console.error("generateTitle error", e);
     return null;
   }
 }
