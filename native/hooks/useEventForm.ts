@@ -6,10 +6,9 @@ import { insertEvent, insertEventTagIds } from "../services/events";
 import { fetchTagOptionsByNames } from "../services/tagOptions";
 import { geocodeAddress, reverseGeocode } from "../services/geocode";
 import { aiFillFromText } from "../services/nlp";
-import { aiFillRemote, generateTitle } from "../services/ai";
+import { aiFillRemote, classifyIconByAI } from "../services/ai";
 import type { Rule, Step, TargetField } from "../types/event";
 import { pickLucideIconName } from "../services/iconPicker";
-import { classifyIconByAI } from "../services/ai";
 import iconNames from "../constants/lucideIconNames.json";
 
 function quickDate(kind: "today" | "tomorrow" | "weekend") {
@@ -50,10 +49,12 @@ function buildDescription(params: { description: string }) {
 
 function buildAutoTitle(what?: string, when?: Date | null) {
   const w = (what || "").trim();
-  const datePart = when ? when.toLocaleDateString() : "日時未定";
-  if (!w && !when) return "";
-  if (!w) return `イベント（${datePart}）`;
-  return `${w}（${datePart}）`;
+  if (when) {
+    const datePart = when.toLocaleDateString();
+    return w ? `${w}（${datePart}）` : `イベント（${datePart}）`;
+  }
+  // 日時未定のときは日付表記を付けない
+  return w;
 }
 
 export function useEventForm() {
@@ -202,24 +203,20 @@ export function useEventForm() {
     [endAt],
   );
 
-  // Auto-generate title via AI when inputs change (only if title is empty)
-  React.useEffect(() => {
-    let timer: any;
-    if (!what && !when && !where) return;
-    if (title && title.trim()) return;
-    timer = setTimeout(async () => {
-      const t = await generateTitle({ what, when, where }).catch(() => null);
-      setTitle((t && t.trim()) || (what ? String(what).trim() : ""));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [what, when, where, title]);
+  // タイトルの自動生成は行わない（生成ボタン押下時のみ）
 
   const suggestedTitle = React.useMemo(
     () => (what ? String(what).trim() : ""),
     [what],
   );
 
-  const canNext1 = true;
+  const canNext1 = React.useMemo(() => {
+    const w = (what || "").trim();
+    const loc = (where || "").trim();
+    const hasCoords =
+      typeof latitude === "number" && typeof longitude === "number";
+    return !!w && !!when && !!loc && hasCoords;
+  }, [what, when, where, latitude, longitude]);
   const next = () =>
     setStep((s) =>
       s === 1 ? (2 as Step) : s === 2 ? (3 as Step) : (3 as Step),
@@ -299,8 +296,16 @@ export function useEventForm() {
       );
       return;
     }
+    if (!(what || "").trim()) {
+      Alert.alert("エラー", "『何をする？』を入力してください");
+      return;
+    }
     if (!when) {
       Alert.alert("エラー", "開始日時を入力してください");
+      return;
+    }
+    if (!(where || "").trim()) {
+      Alert.alert("エラー", "『どこで？』を入力してください");
       return;
     }
 
@@ -491,12 +496,7 @@ export function useEventForm() {
           } else {
             setEndAt(newEnd ?? null);
           }
-          const t = await generateTitle({
-            what: newWhat ?? "",
-            when: newWhen,
-            where: newWhere,
-          }).catch(() => null);
-          setTitle((t && t.trim()) || buildAutoTitle(newWhat ?? "", newWhen));
+          // タイトルはここでは更新しない（生成ボタンのみ）
           updated = true;
         }
       } catch (_err) {
@@ -539,12 +539,7 @@ export function useEventForm() {
         } else {
           setEndAt(newEnd ?? null);
         }
-        const t = await generateTitle({
-          what: newWhat ?? "",
-          when: newWhen,
-          where: newWhere,
-        }).catch(() => null);
-        setTitle((t && t.trim()) || buildAutoTitle(newWhat ?? "", newWhen));
+        // タイトルはここでは更新しない（生成ボタンのみ）
       }
     },
     // geo helpers
@@ -561,10 +556,8 @@ export function useEventForm() {
         } else {
           Alert.alert("見つかりません", "住所から座標を取得できませんでした");
         }
-
       } catch (e: any) {
         Alert.alert("エラー", "ジオコーディングでエラーが発生しました");
-
       }
     },
     async setCoordinatesAndReverseGeocode(lat: number, lng: number) {

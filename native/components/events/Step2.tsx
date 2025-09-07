@@ -6,6 +6,7 @@ import { SectionLabel } from "../ui/SectionLabel";
 import { PrimaryButton, OutlineButton } from "../ui/Button";
 import { LucideIcon } from "../LucideIcon";
 import { IconPickerModal } from "./IconPickerModal";
+import { generateTitle } from "../../services/ai";
 
 export function Step2(props: {
   tags: string[];
@@ -16,6 +17,12 @@ export function Step2(props: {
   setFee: (s: string) => void;
   description: string;
   setDescription: (s: string) => void;
+  // タイトル生成用
+  title: string;
+  setTitle: (s: string) => void;
+  suggestedTitle: string;
+  what?: string;
+  where?: string;
   addDetailsOpen: boolean;
   setAddDetailsOpen: (b: boolean) => void;
   back: () => void;
@@ -34,6 +41,11 @@ export function Step2(props: {
     setFee,
     description,
     setDescription,
+    title,
+    setTitle,
+    suggestedTitle,
+    what,
+    where,
     addDetailsOpen,
     setAddDetailsOpen,
     back,
@@ -45,6 +57,7 @@ export function Step2(props: {
   } = props;
 
   const [iconModalOpen, setIconModalOpen] = React.useState(false);
+  const [genBusy, setGenBusy] = React.useState(false);
 
   return (
     <View>
@@ -199,6 +212,56 @@ export function Step2(props: {
           >
             <Text>手ぶらでOK！</Text>
           </TouchableOpacity>
+        </View>
+      </Card>
+
+      {/* タイトル（AI生成対応） */}
+      <Card style={{ marginTop: 12 }}>
+        <Text style={{ fontWeight: "600", marginBottom: 8 }}>タイトル</Text>
+        <View style={{ gap: 8 }}>
+          <TextInput
+            placeholder={
+              suggestedTitle || "例：渋谷でボードゲーム会｜初心者歓迎"
+            }
+            value={title}
+            onChangeText={setTitle}
+            style={{
+              height: 48,
+              borderColor: "#ccc",
+              borderWidth: 1,
+              borderRadius: 12,
+              paddingHorizontal: 12,
+            }}
+          />
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <OutlineButton
+              title={genBusy ? "生成中…" : "生成"}
+              disabled={genBusy}
+              onPress={async () => {
+                setGenBusy(true);
+                try {
+                  const t = await generateTitle({
+                    what,
+                    when: null,
+                    where,
+                    tags,
+                    capacity,
+                    fee,
+                    description,
+                  });
+                  const base = (() => {
+                    const w = (what || "").trim();
+                    const loc = (where || "").trim();
+                    if (w && loc) return `${loc}で${w}`;
+                    return w || loc || "";
+                  })();
+                  setTitle((t && t.trim()) || base);
+                } finally {
+                  setGenBusy(false);
+                }
+              }}
+            />
+          </View>
         </View>
       </Card>
 

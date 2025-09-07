@@ -3,6 +3,11 @@
 
 import iconNames from "../constants/lucideIconNames.json";
 
+const DEBUG = (() => {
+  const v = (process.env.EXPO_PUBLIC_DEBUG_AI || "").toString().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+})();
+
 // ---- 共通ヘッダ ----
 function authHeaders() {
   const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -47,6 +52,18 @@ export async function aiFillRemote(text: string): Promise<AiFillResult> {
       headers: authHeaders(),
       body: JSON.stringify({ text, tz, now_iso, locale }),
     });
+    if (DEBUG) {
+      try {
+        const copy = r.clone();
+        const preview = await copy.text();
+        console.log(
+          "[AI] aiFillRemote status=",
+          r.status,
+          "body=",
+          preview.slice(0, 400),
+        );
+      } catch {}
+    }
     if (!r.ok) {
       console.warn("aiFillRemote non-OK:", r.status);
       return null;
@@ -84,6 +101,7 @@ export async function generateTitle(params: {
   tags?: string[];
   capacity?: string;
   fee?: string;
+  description?: string;
 }): Promise<string | null> {
   const direct = process.env.EXPO_PUBLIC_AI_TITLE_ENDPOINT;
   const fallback = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
@@ -98,6 +116,7 @@ export async function generateTitle(params: {
         tags: params.tags,
         capacity: params.capacity,
         fee: params.fee,
+        description: params.description,
       }
     : {
         action: "generate_title",
@@ -108,6 +127,7 @@ export async function generateTitle(params: {
           tags: params.tags,
           capacity: params.capacity,
           fee: params.fee,
+          description: params.description,
         },
       };
 
@@ -117,6 +137,18 @@ export async function generateTitle(params: {
       headers: authHeaders(),
       body: JSON.stringify(body),
     });
+    if (DEBUG) {
+      try {
+        const copy = res.clone();
+        const preview = await copy.text();
+        console.log(
+          "[AI] generateTitle status=",
+          res.status,
+          "body=",
+          preview.slice(0, 400),
+        );
+      } catch {}
+    }
     if (!res.ok) {
       console.warn("generateTitle non-OK:", res.status);
       return null;
@@ -159,6 +191,18 @@ export async function classifyIconByAI(
       body: JSON.stringify(body),
       signal: opts?.signal,
     });
+    if (DEBUG) {
+      try {
+        const copy = res.clone();
+        const preview = await copy.text();
+        console.log(
+          "[AI] iconPick status=",
+          res.status,
+          "body=",
+          preview.slice(0, 400),
+        );
+      } catch {}
+    }
     if (!res.ok) {
       console.warn("classifyIconByAI non-OK:", res.status);
       return null;
@@ -175,7 +219,14 @@ export async function classifyIconByAI(
 
     const canonical = normalizeIconName(name);
     return isValidIcon(canonical) ? canonical : null;
-  } catch (e) {
+  } catch (e: any) {
+    const name = (e?.name || "").toString();
+    const msg = (e?.message || "").toString();
+    const text = `${name}:${msg}`.toLowerCase();
+    if (name === "AbortError" || text.includes("abort")) {
+      if (DEBUG) console.log("[AI] iconPick aborted (expected on rapid edits)");
+      return null; // silent for user; this is expected due to effect cleanup
+    }
     console.error("classifyIconByAI error", e);
     return null;
   }
