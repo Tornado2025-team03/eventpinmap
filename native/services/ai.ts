@@ -101,6 +101,7 @@ export async function generateTitle(params: {
   tags?: string[];
   capacity?: string;
   fee?: string;
+  description?: string;
 }): Promise<string | null> {
   const direct = process.env.EXPO_PUBLIC_AI_TITLE_ENDPOINT;
   const fallback = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
@@ -115,6 +116,7 @@ export async function generateTitle(params: {
         tags: params.tags,
         capacity: params.capacity,
         fee: params.fee,
+        description: params.description,
       }
     : {
         action: "generate_title",
@@ -125,6 +127,7 @@ export async function generateTitle(params: {
           tags: params.tags,
           capacity: params.capacity,
           fee: params.fee,
+          description: params.description,
         },
       };
 
@@ -216,7 +219,14 @@ export async function classifyIconByAI(
 
     const canonical = normalizeIconName(name);
     return isValidIcon(canonical) ? canonical : null;
-  } catch (e) {
+  } catch (e: any) {
+    const name = (e?.name || "").toString();
+    const msg = (e?.message || "").toString();
+    const text = `${name}:${msg}`.toLowerCase();
+    if (name === "AbortError" || text.includes("abort")) {
+      if (DEBUG) console.log("[AI] iconPick aborted (expected on rapid edits)");
+      return null; // silent for user; this is expected due to effect cleanup
+    }
     console.error("classifyIconByAI error", e);
     return null;
   }

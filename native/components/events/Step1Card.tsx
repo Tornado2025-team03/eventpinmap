@@ -131,7 +131,7 @@ export function Step1(props: {
       <View style={{ height: 12 }} />
       <SectionLabel>基本情報</SectionLabel>
       <Card style={{ gap: 8 }}>
-        <Text style={{ fontWeight: "600" }}>何をする？</Text>
+        <Text style={{ fontWeight: "600" }}>何をする？（必須）</Text>
         <TextInput
           style={{
             height: 48,
@@ -160,7 +160,7 @@ export function Step1(props: {
       </Card>
 
       <Card style={{ gap: 8 }}>
-        <Text style={{ fontWeight: "600" }}>いつ？</Text>
+        <Text style={{ fontWeight: "600" }}>いつ？（必須）</Text>
         <View style={{ gap: 8 }}>
           <OutlineButton
             title={when ? when.toLocaleDateString() : "日付を選択"}
@@ -260,7 +260,7 @@ export function Step1(props: {
       </Card>
 
       <Card style={{ gap: 8 }}>
-        <Text style={{ fontWeight: "600" }}>どこで？</Text>
+        <Text style={{ fontWeight: "600" }}>どこで？（必須）</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <TextInput
             style={{
@@ -314,9 +314,14 @@ export function Step1(props: {
             <Text>{showMap ? "地図を閉じる" : "地図で選ぶ"}</Text>
           </TouchableOpacity>
         </View>
-        {latitude != null && longitude != null && (
-          <Text style={{ marginTop: 4, color: "#555" }}>
-            位置情報: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+        {latitude != null && longitude != null ? (
+          <Text style={{ marginTop: 4, color: "#2a7" }}>
+            位置情報（OK）: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+          </Text>
+        ) : (
+          <Text style={{ marginTop: 4, color: "#c33" }}>
+            位置情報（必須・未設定）: 検索 or 地図で選ぶ
+            で座標を設定してください
           </Text>
         )}
 

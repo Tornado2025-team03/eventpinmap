@@ -63,6 +63,11 @@ export default function EventCreateScreen() {
 
           {f.step === 2 && (
             <Step2
+              title={f.title}
+              setTitle={f.setTitle}
+              suggestedTitle={f.suggestedTitle}
+              what={f.what}
+              where={f.where}
               tags={f.tags}
               toggleTag={f.toggleTag}
               capacity={f.capacity}
