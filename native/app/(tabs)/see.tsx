@@ -23,6 +23,7 @@ import { supabase } from "../../lib/supabase";
 import { useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as LucideIcons from "lucide-react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type LatLng = { latitude: number; longitude: number };
 type Tag = { id: string; name: string };
@@ -171,7 +172,7 @@ export default function App() {
       return;
     }
     setMyAvailablePin(endAt ? { coord, startAt, endAt } : null);
-    Alert.alert("ステータスを「available」にしました！");
+    Alert.alert("ステータスをオンラインにしました！");
   }
 
   async function setUserStatusHidden() {
@@ -197,7 +198,7 @@ export default function App() {
       return;
     }
     setMyAvailablePin(null);
-    Alert.alert("ステータスを「hidden」にしました");
+    Alert.alert("ステータスをオフラインにしました");
   }
   // Row → Pin 変換
   const rowToPin = useCallback((r: EventRow): Pin | null => {
@@ -417,12 +418,12 @@ export default function App() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1 }}>
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          paddingTop: 35,
+          // paddingTop: 35,
           padding: 8,
           backgroundColor: "#fff",
           borderBottomWidth: 1,
@@ -443,7 +444,7 @@ export default function App() {
           }}
           type="start"
         />
-        <Text style={{ marginHorizontal: 8 }}>〜</Text>
+        <Text style={{ marginHorizontal: 10 }}>〜</Text>
         <DateTimeInput
           value={searchEnd}
           onChange={setSearchEnd}
@@ -514,11 +515,27 @@ export default function App() {
                 onPress={() => handleMarkerPress(pin)}
                 tracksViewChanges={viewChanges}
               >
-                <IconComponent
-                  size={32}
-                  color={isHighlighted ? "red" : "#f6c604ff"}
-                  strokeWidth={2}
-                />
+                <View
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: 16, // half of width/height for circle
+                    width: 32,
+                    height: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.15,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                >
+                  <IconComponent
+                    size={32}
+                    color={isHighlighted ? "red" : "#f6c604ff"}
+                    strokeWidth={2}
+                  />
+                </View>
               </Marker>
             );
           })}
@@ -536,7 +553,7 @@ export default function App() {
                   onPress={() => {
                     Alert.alert(
                       "ステータス変更",
-                      "ステータスを「hidden」にしますか？",
+                      "ステータスをオフラインにしますか？",
                       [
                         { text: "キャンセル", style: "cancel" },
                         {
@@ -564,7 +581,7 @@ export default function App() {
           zIndex: 20,
         }}
       >
-        <RoundBtn label="Refresh" onPress={() => void loadEvents()} />
+        <RoundBtn label="更新" onPress={() => void loadEvents()} />
       </View>
       <View
         style={{
@@ -729,7 +746,7 @@ export default function App() {
 
                 <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
                   <ActionBtn
-                    label="Directions"
+                    label="経路を見る"
                     onPress={() => {
                       if (selectedEvent) {
                         openDirections(selectedEvent);
@@ -738,7 +755,7 @@ export default function App() {
                     }}
                   />
                   <ActionBtn
-                    label="participate"
+                    label="参加する"
                     onPress={async () => {
                       Alert.alert(
                         "参加確認",
@@ -899,7 +916,7 @@ export default function App() {
                 <Text
                   style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}
                 >
-                  ステータスを「available」に変更
+                  ステータスをオンラインに変更
                 </Text>
                 <Text>開始時刻</Text>
                 <DateTimeInput
@@ -956,29 +973,25 @@ export default function App() {
                         Alert.alert("開始時刻を入力してください");
                         return;
                       }
-                      Alert.alert(
-                        "確認",
-                        "この場所で「available」にしますか？",
-                        [
-                          { text: "キャンセル", style: "cancel" },
-                          {
-                            text: "OK",
-                            onPress: async () => {
-                              if (dropPinModal.coord) {
-                                await setUserStatusAvailable(
-                                  dropPinModal.coord,
-                                  pinStartAt,
-                                  pinEndAt,
-                                );
-                                setDropPinModal({
-                                  visible: false,
-                                  coord: null,
-                                });
-                              }
-                            },
+                      Alert.alert("確認", "この場所でオンラインにしますか？", [
+                        { text: "キャンセル", style: "cancel" },
+                        {
+                          text: "OK",
+                          onPress: async () => {
+                            if (dropPinModal.coord) {
+                              await setUserStatusAvailable(
+                                dropPinModal.coord,
+                                pinStartAt,
+                                pinEndAt,
+                              );
+                              setDropPinModal({
+                                visible: false,
+                                coord: null,
+                              });
+                            }
                           },
-                        ],
-                      );
+                        },
+                      ]);
                     }}
                   />
                 </View>
@@ -1015,11 +1028,12 @@ export default function App() {
                 <Text
                   style={{ fontSize: 18, fontWeight: "700", marginBottom: 12 }}
                 >
-                  ドロップピンで「available」ステータスを設定する方法
+                  ドロップピンでオンラインステータスを設定する方法
                 </Text>
                 <Text style={{ fontSize: 15, marginBottom: 16, color: "#444" }}>
                   マップ上で長押しするとピンをドロップできます。{"\n"}
-                  ピンをドロップした後、開始時刻と終了時刻を選択して「確定」を押すと、あなたのステータスが「available」になります。
+                  ピンをドロップした後、開始時刻と終了時刻を選択して「確定」を押すと、あなたのステータスがオンラインになり
+                  主催者に誘ってもらえるようになります！
                 </Text>
                 <View style={{ alignItems: "flex-end", marginTop: 12 }}>
                   <TouchableOpacity
@@ -1092,7 +1106,7 @@ export default function App() {
           }}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -1254,17 +1268,60 @@ function DateTimeInput({
         </Text>
       </TouchableOpacity>
       {Platform.OS === "ios" && show && (
-        <DateTimePicker
-          value={value ?? new Date()}
-          mode="datetime"
-          display="spinner"
-          minuteInterval={1}
-          onChange={(_, date) => {
-            setShow(false);
-            if (date) onChange(date);
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 100,
+            backgroundColor: "rgba(255,255,255,0.95)", // 半透明で背景を隠す
           }}
-        />
+        >
+          <DateTimePicker
+            value={value ?? new Date()}
+            mode="datetime"
+            display="spinner"
+            minuteInterval={1}
+            onChange={(_, date) => {
+              setShow(false);
+              if (date) onChange(date);
+            }}
+          />
+        </View>
       )}
     </>
   );
 }
+// {Platform.OS === "ios" && show && (
+//   <View
+//     style={{
+//       position: "absolute",
+//       top: 0,
+//       left: 0,
+//       right: 0,
+//       bottom: 0,
+//       justifyContent: "center",
+//       alignItems: "center",
+//       zIndex: 100,
+//       backgroundColor: "rgba(255,255,255,0.95)", // 半透明で背景を隠す
+//     }}
+//   >
+//     <DateTimePicker
+//       value={value ?? new Date()}
+//       mode="datetime"
+//       display="spinner"
+//       minuteInterval={1}
+//       onChange={(_, date) => {
+//         setShow(false);
+//         if (date) onChange(date);
+//       }}
+//     />
+//   </View>
+//       )}
+//     </>
+//   );
+// }
