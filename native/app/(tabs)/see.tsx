@@ -172,7 +172,7 @@ export default function App() {
       return;
     }
     setMyAvailablePin(endAt ? { coord, startAt, endAt } : null);
-    Alert.alert("ステータスを「available」にしました！");
+    Alert.alert("ステータスをオンラインにしました！");
   }
 
   async function setUserStatusHidden() {
@@ -198,7 +198,7 @@ export default function App() {
       return;
     }
     setMyAvailablePin(null);
-    Alert.alert("ステータスを「hidden」にしました");
+    Alert.alert("ステータスをオフラインにしました");
   }
   // Row → Pin 変換
   const rowToPin = useCallback((r: EventRow): Pin | null => {
@@ -553,7 +553,7 @@ export default function App() {
                   onPress={() => {
                     Alert.alert(
                       "ステータス変更",
-                      "ステータスを「hidden」にしますか？",
+                      "ステータスをオフラインにしますか？",
                       [
                         { text: "キャンセル", style: "cancel" },
                         {
@@ -581,7 +581,7 @@ export default function App() {
           zIndex: 20,
         }}
       >
-        <RoundBtn label="Refresh" onPress={() => void loadEvents()} />
+        <RoundBtn label="更新" onPress={() => void loadEvents()} />
       </View>
       <View
         style={{
@@ -916,7 +916,7 @@ export default function App() {
                 <Text
                   style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}
                 >
-                  ステータスを「available」に変更
+                  ステータスをオンラインに変更
                 </Text>
                 <Text>開始時刻</Text>
                 <DateTimeInput
@@ -973,29 +973,25 @@ export default function App() {
                         Alert.alert("開始時刻を入力してください");
                         return;
                       }
-                      Alert.alert(
-                        "確認",
-                        "この場所で「available」にしますか？",
-                        [
-                          { text: "キャンセル", style: "cancel" },
-                          {
-                            text: "OK",
-                            onPress: async () => {
-                              if (dropPinModal.coord) {
-                                await setUserStatusAvailable(
-                                  dropPinModal.coord,
-                                  pinStartAt,
-                                  pinEndAt,
-                                );
-                                setDropPinModal({
-                                  visible: false,
-                                  coord: null,
-                                });
-                              }
-                            },
+                      Alert.alert("確認", "この場所でオンラインにしますか？", [
+                        { text: "キャンセル", style: "cancel" },
+                        {
+                          text: "OK",
+                          onPress: async () => {
+                            if (dropPinModal.coord) {
+                              await setUserStatusAvailable(
+                                dropPinModal.coord,
+                                pinStartAt,
+                                pinEndAt,
+                              );
+                              setDropPinModal({
+                                visible: false,
+                                coord: null,
+                              });
+                            }
                           },
-                        ],
-                      );
+                        },
+                      ]);
                     }}
                   />
                 </View>
@@ -1032,11 +1028,12 @@ export default function App() {
                 <Text
                   style={{ fontSize: 18, fontWeight: "700", marginBottom: 12 }}
                 >
-                  ドロップピンで「available」ステータスを設定する方法
+                  ドロップピンでオンラインステータスを設定する方法
                 </Text>
                 <Text style={{ fontSize: 15, marginBottom: 16, color: "#444" }}>
                   マップ上で長押しするとピンをドロップできます。{"\n"}
-                  ピンをドロップした後、開始時刻と終了時刻を選択して「確定」を押すと、あなたのステータスが「available」になります。
+                  ピンをドロップした後、開始時刻と終了時刻を選択して「確定」を押すと、あなたのステータスがオンラインになり
+                  主催者に誘ってもらえるようになります！
                 </Text>
                 <View style={{ alignItems: "flex-end", marginTop: 12 }}>
                   <TouchableOpacity
@@ -1299,3 +1296,32 @@ function DateTimeInput({
     </>
   );
 }
+// {Platform.OS === "ios" && show && (
+//   <View
+//     style={{
+//       position: "absolute",
+//       top: 0,
+//       left: 0,
+//       right: 0,
+//       bottom: 0,
+//       justifyContent: "center",
+//       alignItems: "center",
+//       zIndex: 100,
+//       backgroundColor: "rgba(255,255,255,0.95)", // 半透明で背景を隠す
+//     }}
+//   >
+//     <DateTimePicker
+//       value={value ?? new Date()}
+//       mode="datetime"
+//       display="spinner"
+//       minuteInterval={1}
+//       onChange={(_, date) => {
+//         setShow(false);
+//         if (date) onChange(date);
+//       }}
+//     />
+//   </View>
+//       )}
+//     </>
+//   );
+// }
