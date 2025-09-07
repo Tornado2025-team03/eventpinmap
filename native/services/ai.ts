@@ -43,3 +43,55 @@ export async function aiFillRemote(text: string): Promise<{
     longitude: typeof data.longitude === "number" ? data.longitude : null,
   };
 }
+
+// Generate a suitable title using AI (Gemini via server)
+export async function generateTitle(params: {
+  what?: string;
+  when?: Date | null;
+  where?: string;
+  tags?: string[];
+  capacity?: string;
+  fee?: string;
+}): Promise<string | null> {
+  const direct = process.env.EXPO_PUBLIC_AI_TITLE_ENDPOINT;
+  const fallback = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
+  const endpoint = direct || fallback;
+  if (!endpoint) return null;
+
+  const body = direct
+    ? {
+        what: params.what,
+        when_iso: params.when?.toISOString(),
+        where: params.where,
+        tags: params.tags,
+        capacity: params.capacity,
+        fee: params.fee,
+      }
+    : {
+        action: "generate_title",
+        input: {
+          what: params.what,
+          when_iso: params.when?.toISOString(),
+          where: params.where,
+          tags: params.tags,
+          capacity: params.capacity,
+          fee: params.fee,
+        },
+      };
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const json: any = await res.json().catch(() => ({}));
+    const t = (json?.title || json?.name || json?.data?.title || "")
+      .toString()
+      .trim();
+    return t || null;
+  } catch {
+    return null;
+  }
+}

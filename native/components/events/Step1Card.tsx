@@ -42,9 +42,7 @@ export function Step1(props: {
   aiFill: (freeText: string) => Promise<void>;
 }) {
   const {
-    title,
-    setTitle,
-    suggestedTitle,
+    // title, setTitle, suggestedTitle, // title はここでは直接いじらない
     what,
     setWhat,
     when,
@@ -57,8 +55,6 @@ export function Step1(props: {
     longitude,
     setLatitude,
     setLongitude,
-    geocodeCurrentAddress,
-    setCoordinatesAndReverseGeocode,
     showPicker,
     pickerMode,
     targetField,
@@ -67,55 +63,81 @@ export function Step1(props: {
     setQuickDate,
     next,
     canNext1,
+    aiFill,
   } = props;
 
   const [showMap, setShowMap] = React.useState(false);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [searching, setSearching] = React.useState(false);
+  const [freeText, setFreeText] = React.useState("");
 
   return (
     <View>
-      <Text style={{ fontWeight: "600", marginTop: 16, marginBottom: 8 }}>
-        思いついたことを、そのまま入力！
-      </Text>
-      <View style={{ gap: 8 }}>
-        <TextInput
-          style={{
-            height: 48,
-            borderColor: "#ccc",
-            borderWidth: 1,
-            borderRadius: 12,
-            paddingHorizontal: 12,
-          }}
-          placeholder="明日の夜渋谷でエヴァンゲリオンのアニメ見たいなぁ"
-          value={title}
-          onChangeText={setTitle}
-        />
-        <Button
-          title={aiBusy ? "解析中…" : "AIらくらく入力"}
-          disabled={aiBusy}
-          onPress={async () => {
-            const text = (title ?? "").trim();
-            if (!text) {
-              Alert.alert(
-                "自由文が空です",
-                "上の欄にやりたいことを書いてください。",
-              );
-              return;
-            }
-            setAiBusy(true);
-            try {
-              await props.aiFill(text);
-              Alert.alert("反映しました", "候補をフォームに反映しました。");
-            } catch (e: any) {
-              Alert.alert("AI入力に失敗", e?.message ?? "解析に失敗しました");
-            } finally {
-              setAiBusy(false);
-            }
-          }}
-        />
+      {/* AIらくらく入力（カード） */}
+      <View
+        style={{
+          backgroundColor: "#fff",
+          borderRadius: 12,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: "#eee",
+          marginTop: 12,
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 2,
+        }}
+      >
+        <Text style={{ fontWeight: "600", marginBottom: 8 }}>
+          思いついたことを、そのまま入力！
+        </Text>
+        <Text style={{ color: "#666", marginBottom: 8 }}>
+          1文で自由に書くと、AIが下のフォームに自動反映します
+        </Text>
+        <View style={{ gap: 8 }}>
+          <TextInput
+            style={{
+              height: 48,
+              borderColor: "#ccc",
+              borderWidth: 1,
+              borderRadius: 12,
+              paddingHorizontal: 12,
+            }}
+            placeholder="例：明日の夜 渋谷でアニメ鑑賞会"
+            value={freeText}
+            onChangeText={setFreeText}
+          />
+          <Button
+            title={aiBusy ? "解析中…" : "AIらくらく入力"}
+            disabled={aiBusy}
+            onPress={async () => {
+              const text = freeText.trim();
+              if (!text) {
+                Alert.alert(
+                  "自由入力が空です",
+                  "上段の自由欄にやりたいことを書いてください",
+                );
+                return;
+              }
+              setAiBusy(true);
+              try {
+                await aiFill(text);
+                Alert.alert("反映しました", "候補をフォームに反映しました");
+              } catch (e: any) {
+                Alert.alert(
+                  "AI入力に失敗しました",
+                  e?.message ?? "解析に失敗しました",
+                );
+              } finally {
+                setAiBusy(false);
+              }
+            }}
+          />
+        </View>
       </View>
 
+      {/* 手動入力 */}
       <Text style={{ fontWeight: "600", marginBottom: 8, marginTop: 16 }}>
         何をする？
       </Text>
@@ -127,7 +149,7 @@ export function Step1(props: {
           borderRadius: 12,
           paddingHorizontal: 12,
         }}
-        placeholder="作品名 or みんなで決めたい"
+        placeholder="作品名 など（みんなで決める でもOK）"
         value={what}
         onChangeText={setWhat}
       />
@@ -138,15 +160,15 @@ export function Step1(props: {
           </TouchableOpacity>
         ))}
         <TouchableOpacity
-          onPress={() => setWhat("みんなで決めたい")}
+          onPress={() => setWhat("みんなで決める")}
           style={chip}
         >
-          <Text>みんなで決めたい</Text>
+          <Text>みんなで決める</Text>
         </TouchableOpacity>
       </View>
 
       <Text style={{ fontWeight: "600", marginTop: 16, marginBottom: 8 }}>
-        いつやる？
+        いつ？
       </Text>
       <View style={{ gap: 8 }}>
         <Button
@@ -206,14 +228,14 @@ export function Step1(props: {
         )}
 
         {!!formattedStart && (
-          <Text style={{ marginTop: 4 }}>
-            {`選択中: ${formattedStart}${formattedEnd ? ` ~ ${formattedEnd}` : ""}`}
-          </Text>
+          <Text
+            style={{ marginTop: 4 }}
+          >{`選択中: ${formattedStart}${formattedEnd ? ` ~ ${formattedEnd}` : ""}`}</Text>
         )}
       </View>
 
       <Text style={{ fontWeight: "600", marginTop: 16, marginBottom: 8 }}>
-        どこでやる？
+        どこで？
       </Text>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <TextInput
@@ -235,7 +257,7 @@ export function Step1(props: {
             if (q.length < 2) {
               Alert.alert(
                 "検索ワードが短いです",
-                "2文字以上を入力してください。",
+                "2文字以上を入力してください",
               );
               return;
             }
@@ -249,11 +271,11 @@ export function Step1(props: {
               } else {
                 Alert.alert(
                   "見つかりません",
-                  "該当する場所が見つかりませんでした。",
+                  "該当する場所が見つかりませんでした",
                 );
               }
-            } catch (e) {
-              Alert.alert("エラー", "検索中にエラーが発生しました。");
+            } catch {
+              Alert.alert("エラー", "検索中にエラーが発生しました");
             } finally {
               setSearching(false);
             }
@@ -274,7 +296,7 @@ export function Step1(props: {
         </TouchableOpacity>
       </View>
 
-      {/* 地図で選択 */}
+      {/* 地図で選ぶ */}
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
         <TouchableOpacity onPress={() => setShowMap((s) => !s)} style={chip}>
           <Text>{showMap ? "地図を閉じる" : "地図で選ぶ"}</Text>
@@ -295,7 +317,6 @@ export function Step1(props: {
           }
           onConfirm={(lat, lng) => {
             setShowMap(false);
-            // ユーザが入力した住所は変更しない
             setLatitude(lat);
             setLongitude(lng);
           }}
@@ -316,3 +337,5 @@ export function Step1(props: {
     </View>
   );
 }
+
+export default Step1;

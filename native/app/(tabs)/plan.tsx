@@ -8,7 +8,7 @@ import {
   Platform,
 } from "react-native";
 import { useEventForm } from "../../hooks/useEventForm";
-import { Step1 } from "../../components/events/Step1";
+import { Step1 } from "../../components/events/Step1Card";
 import { Step2 } from "../../components/events/Step2";
 import { Step3 } from "../../components/events/Step3";
 
@@ -40,7 +40,7 @@ export default function EventCreateScreen() {
           <Text
             style={{ textAlign: "center", color: "#666", marginBottom: 16 }}
           >
-            必要事項を入力
+            イベントの内容を入力してください
           </Text>
 
           {f.step === 1 && (
