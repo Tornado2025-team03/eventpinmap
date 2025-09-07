@@ -1,8 +1,10 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Button } from "react-native";
 import { Card } from "../ui/Card";
 import { SectionLabel } from "../ui/SectionLabel";
 import { PrimaryButton, OutlineButton } from "../ui/Button";
+import { LucideIcon } from "../LucideIcon";
+
 
 export function Step3(props: {
   what: string;
@@ -21,6 +23,7 @@ export function Step3(props: {
   publishing: boolean;
   back: () => void;
   handlePublish: () => void;
+  iconName?: string;
 }) {
   const {
     what,
@@ -39,6 +42,7 @@ export function Step3(props: {
     publishing,
     back,
     handlePublish,
+    iconName,
   } = props;
 
   return (
@@ -65,6 +69,21 @@ export function Step3(props: {
           {!!fee && <Text>・参加費：{fee}</Text>}
           {!!description && <Text>・説明：{description}</Text>}
           <Text>・参加方法：{rule === "open" ? "誰でも参加OK" : "承認制"}</Text>
+          {iconName ? (
+            <View
+              style={{
+                marginTop: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Text>・アイコン：</Text>
+              <LucideIcon name={iconName} size={22} />
+              <Text style={{ color: "#555" }}>{iconName}</Text>
+            </View>
+          ) : null}
+        </View>
         </View>
       </Card>
 

@@ -4,6 +4,9 @@ import { chip } from "./styles";
 import { Card } from "../ui/Card";
 import { SectionLabel } from "../ui/SectionLabel";
 import { PrimaryButton, OutlineButton } from "../ui/Button";
+import { LucideIcon } from "../LucideIcon";
+import { IconPickerModal } from "./IconPickerModal";
+
 
 export function Step2(props: {
   tags: string[];
@@ -18,6 +21,10 @@ export function Step2(props: {
   setAddDetailsOpen: (b: boolean) => void;
   back: () => void;
   next: () => void;
+  iconName: string;
+  setIconName: (n: string) => void;
+  chooseIconManually: (n: string) => void;
+  resetIconAuto?: () => void;
 }) {
   const {
     tags,
@@ -32,7 +39,13 @@ export function Step2(props: {
     setAddDetailsOpen,
     back,
     next,
+    iconName,
+    setIconName,
+    chooseIconManually,
+    resetIconAuto,
   } = props;
+
+  const [iconModalOpen, setIconModalOpen] = React.useState(false);
 
   return (
     <View>
@@ -49,35 +62,66 @@ export function Step2(props: {
           <Switch value={addDetailsOpen} onValueChange={setAddDetailsOpen} />
         </View>
 
-        {addDetailsOpen && (
-          <View style={{ marginTop: 8 }}>
-            <Text style={{ marginTop: 12 }}>雰囲気タグ（複数選択可）</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-              {[
-                "初心者歓迎",
-                "10代",
-                "20代",
-                "30代以上",
-                "年齢不問",
-                "男子会",
-                "女子会",
-                "静かに集中",
-                "飲食持込自由",
-                "ネタバレ配慮",
-                "初見歓迎",
-              ].map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => toggleTag(t)}
-                  style={[
-                    chip,
-                    { backgroundColor: tags.includes(t) ? "#cfe" : "#eef" },
-                  ]}
-                >
-                  <Text>#{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+{addDetailsOpen && (
+  <>
+    {/* 追加: アイコン設定（main） */}
+    <Text style={{ marginTop: 12 }}>イベントのアイコン</Text>
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <LucideIcon name={iconName} />
+        <Text style={{ color: "#555" }}>{iconName}</Text>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => setIconModalOpen(true)}
+          style={{ backgroundColor: "#0a84ff", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "600" }}>変更</Text>
+        </TouchableOpacity>
+        {resetIconAuto && (
+          <TouchableOpacity
+            onPress={() => resetIconAuto()}
+            style={{ backgroundColor: "#eee", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+          >
+            <Text style={{ color: "#333", fontWeight: "600" }}>自動に戻す</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+
+    {/* 既存: 雰囲気タグ（両方にあるが配置を main に合わせる） */}
+    <Text style={{ marginTop: 12 }}>雰囲気タグ（複数選択可）</Text>
+    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+      {[
+        "初心者歓迎","10代","20代","30代以上","年齢不問",
+        "男子会","女子会","静かに集中","飲食持込自由","ネタバレ配慮","初見歓迎",
+      ].map((t) => (
+        <TouchableOpacity
+          key={t}
+          onPress={() => toggleTag(t)}
+          style={[chip, { backgroundColor: tags.includes(t) ? "#cfe" : "#eef" }]}
+        >
+          <Text>#{t}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+
+    {/* 追加: 募集人数（main） */}
+    <Text style={{ marginTop: 12 }}>募集人数</Text>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
+      {["何人でも", "2~3人", "4~5人", "6人以上"].map((person) => (
+        <TouchableOpacity
+          key={person}
+          onPress={() => setCapacity(person)}
+          style={[chip, { backgroundColor: capacity === person ? "#cfe" : "#eef" }]}
+        >
+          <Text>{person}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  </>
+)}
+
 
             <Text style={{ marginTop: 12 }}>募集人数</Text>
             <View
@@ -145,6 +189,13 @@ export function Step2(props: {
           </View>
         )}
       </Card>
+
+      <IconPickerModal
+        visible={iconModalOpen}
+        value={iconName}
+        onClose={() => setIconModalOpen(false)}
+        onSelect={(n) => chooseIconManually(n)}
+      />
 
       <View
         style={{

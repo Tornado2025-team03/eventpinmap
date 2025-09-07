@@ -2,13 +2,25 @@ import { supabase } from "../lib/supabase";
 import type { EventInsertPayload } from "../types/event";
 
 export async function insertEvent(payload: EventInsertPayload) {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("events")
-    .insert(payload)
+    .insert(payload as any)
     .select()
     .single();
-  if (error) throw error;
-  return data;
+  if (!error) return data;
+  const msg = String((error as any)?.message || "").toLowerCase();
+  // Fallback for environments where `icon` column doesn't exist yet.
+  if (msg.includes("column") && msg.includes("icon")) {
+    const { icon, ...rest } = payload;
+    const retry = await supabase
+      .from("events")
+      .insert(rest as Omit<EventInsertPayload, "icon">)
+      .select()
+      .single();
+    if (retry.error) throw retry.error;
+    return retry.data;
+  }
+  throw error;
 }
 
 export async function insertEventTags(
