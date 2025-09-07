@@ -5,12 +5,18 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { supabase } from "../lib/supabase";
-import { inviteIdleUsers } from "../services/organizer";
+import {
+  getAvailableUsers,
+  inviteIdleUsers,
+  setUserStatusAvailable,
+  getUserStatus,
+  createTestAvailableUsers,
+  type AvailableUser,
+} from "../services/organizer";
+import { useAuth } from "../provider/AuthProvider";
 
 interface IdleUser {
   id: string;
@@ -32,32 +38,26 @@ export function InviteModal({
   eventName,
   onClose,
 }: InviteModalProps) {
+  const { session } = useAuth();
   const [idleUsers, setIdleUsers] = useState<IdleUser[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [currentUserStatus, setCurrentUserStatus] = useState<any>(null);
 
   const loadIdleUsers = async () => {
+    if (!eventId) return;
     setLoading(true);
     try {
-      // 実装例: 最近アクティブでまだこのイベントに参加していないユーザーを取得
-      const { data: currentMembers } = await supabase
-        .from("event_members")
-        .select("user_id")
-        .eq("event_id", eventId);
+      const availableUsers = await getAvailableUsers(eventId);
+      setIdleUsers(availableUsers);
 
-      const excludeUserIds = currentMembers?.map((m) => m.user_id) || [];
-
-      const { data: users, error } = await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url, last_active")
-        .not("id", "in", `(${excludeUserIds.join(",")})`)
-        .order("last_active", { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setIdleUsers(users || []);
+      // 現在のユーザーステータスも取得
+      if (session?.user?.id) {
+        const userStatus = await getUserStatus(session.user.id);
+        setCurrentUserStatus(userStatus);
+        console.log("Current user status:", userStatus);
+      }
     } catch (error: any) {
       Alert.alert("エラー", "ユーザー情報の取得に失敗しました");
     } finally {
@@ -69,7 +69,6 @@ export function InviteModal({
     if (visible && eventId) {
       loadIdleUsers();
       setSelectedUsers(new Set());
-      setSearchQuery("");
     }
   }, [visible, eventId]);
 
@@ -83,32 +82,81 @@ export function InviteModal({
     setSelectedUsers(newSelected);
   };
 
+  const selectAllUsers = () => {
+    const allUserIds = idleUsers.map((user) => user.id);
+    setSelectedUsers(new Set(allUserIds));
+  };
+
+  const clearAllSelection = () => {
+    setSelectedUsers(new Set());
+  };
+
+  const handleTestAvailable = async () => {
+    if (!session?.user?.id) {
+      Alert.alert("エラー", "ユーザーIDが取得できません");
+      return;
+    }
+
+    try {
+      await setUserStatusAvailable(session.user.id);
+      Alert.alert(
+        "成功",
+        "あなたのステータスをavailableに設定しました。更新ボタンを押してください。",
+      );
+    } catch (error: any) {
+      console.error("Test available error:", error);
+      Alert.alert("エラー", "ステータス設定に失敗しました");
+    }
+  };
+
+  const handleCreateTestUsers = async () => {
+    try {
+      await createTestAvailableUsers();
+      Alert.alert(
+        "情報",
+        "テスト用ユーザー作成はセキュリティ制限により無効です。代わりに別のアカウントでログインして利用可能ステータスを設定してください。",
+      );
+    } catch (error: any) {
+      console.error("Create test users error:", error);
+      Alert.alert("情報", error.message || "テストユーザー作成に失敗しました");
+    }
+  };
+
   const handleInvite = async () => {
     if (!eventId || selectedUsers.size === 0) {
       Alert.alert("エラー", "招待するユーザーを選択してください");
       return;
     }
 
-    setInviting(true);
-    try {
-      await inviteIdleUsers(eventId, Array.from(selectedUsers));
-      Alert.alert(
-        "成功",
-        `${selectedUsers.size}人のユーザーに招待を送信しました`,
-      );
-      onClose();
-    } catch (error: any) {
-      Alert.alert("エラー", "招待の送信に失敗しました");
-    } finally {
-      setInviting(false);
-    }
+    Alert.alert(
+      "招待を送信しますか？",
+      `選択した${selectedUsers.size}人のユーザーに招待を送信します。\n招待されたユーザーは予約一覧で確認・参加可能になります。`,
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "送信",
+          onPress: async () => {
+            setInviting(true);
+            try {
+              await inviteIdleUsers(eventId, Array.from(selectedUsers));
+              Alert.alert(
+                "招待送信完了！",
+                `${selectedUsers.size}人のユーザーに招待を送信しました。\n相手の予約一覧に表示され、参加・不参加を選択できます。`,
+                [{ text: "OK", onPress: onClose }],
+              );
+            } catch (error: any) {
+              console.error("招待送信エラー:", error);
+              Alert.alert(
+                "エラー",
+                "招待の送信に失敗しました。\nネットワーク接続を確認してもう一度お試しください。",
+              );
+              setInviting(false);
+            }
+          },
+        },
+      ],
+    );
   };
-
-  const filteredUsers = idleUsers.filter(
-    (user) =>
-      !searchQuery ||
-      user.display_name?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
 
   const formatLastActive = (lastActive: string | null) => {
     if (!lastActive) return "不明";
@@ -137,14 +185,55 @@ export function InviteModal({
           <View style={styles.header}>
             <Text style={styles.title}>暇な人を誘う</Text>
             <Text style={styles.subtitle}>{eventName}</Text>
-          </View>
 
-          <TextInput
-            style={styles.searchInput}
-            placeholder="ユーザー名で検索..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+            {idleUsers.length > 0 && (
+              <View style={styles.selectionButtons}>
+                <TouchableOpacity
+                  style={styles.selectionButton}
+                  onPress={selectAllUsers}
+                >
+                  <Text style={styles.selectionButtonText}>全選択</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.selectionButton}
+                  onPress={clearAllSelection}
+                >
+                  <Text style={styles.selectionButtonText}>全解除</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.refreshButton}
+                  onPress={loadIdleUsers}
+                  disabled={loading}
+                >
+                  <Text style={styles.refreshButtonText}>
+                    {loading ? "更新中..." : "更新"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {idleUsers.length === 0 && !loading && (
+              <View style={styles.testSection}>
+                <Text style={styles.testText}>
+                  招待可能なユーザーがいません。{"\n"}
+                  テスト用に自分をavailableに設定してください：
+                </Text>
+                <TouchableOpacity
+                  style={styles.testButton}
+                  onPress={handleTestAvailable}
+                >
+                  <Text style={styles.testButtonText}>
+                    自分をavailableに設定
+                  </Text>
+                </TouchableOpacity>
+                <Text
+                  style={[styles.testText, { fontSize: 12, marginTop: 10 }]}
+                >
+                  注意：テストモードでは自分自身も招待可能として表示されます
+                </Text>
+              </View>
+            )}
+          </View>
 
           <ScrollView
             style={styles.userList}
@@ -152,14 +241,10 @@ export function InviteModal({
           >
             {loading ? (
               <Text style={styles.loadingText}>読み込み中...</Text>
-            ) : filteredUsers.length === 0 ? (
-              <Text style={styles.emptyText}>
-                {searchQuery
-                  ? "該当するユーザーが見つかりません"
-                  : "招待可能なユーザーがいません"}
-              </Text>
+            ) : idleUsers.length === 0 ? (
+              <Text style={styles.emptyText}>招待可能なユーザーがいません</Text>
             ) : (
-              filteredUsers.map((user) => (
+              idleUsers.map((user) => (
                 <TouchableOpacity
                   key={user.id}
                   style={[
@@ -255,13 +340,66 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
   },
-  searchInput: {
-    margin: 16,
-    padding: 12,
+  selectionButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+  },
+  selectionButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: "#E0E0E0",
+  },
+  selectionButtonText: {
+    fontSize: 12,
+    color: "#666",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  refreshButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    backgroundColor: "#2196F3",
+    borderRadius: 6,
+  },
+  refreshButtonText: {
+    fontSize: 12,
+    color: "#fff",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  testSection: {
+    padding: 20,
+    alignItems: "center",
+  },
+  testText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  testButton: {
+    backgroundColor: "#FF9800",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    fontSize: 16,
+  },
+  testButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+    textAlign: "center",
   },
   userList: {
     flex: 1,
