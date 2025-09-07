@@ -1,31 +1,168 @@
+// native/services/ai.ts
+// 共通のAIユーティリティ（AIフィル、タイトル生成、アイコン分類）
+
 import iconNames from "../constants/lucideIconNames.json";
 
-const AI_ENDPOINT = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
+// ---- 共通ヘッダ ----
+function authHeaders() {
+  const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${anon}`,
+    apikey: anon ?? "",
+  };
+}
 
+// ---- 型 ----
+export type AiFillRemoteResponse = {
+  what?: string;
+  where_text?: string;
+  start_iso?: string;
+  end_iso?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export type AiFillResult = {
+  what?: string;
+  where?: string;
+  when?: Date | null;
+  endAt?: Date | null;
+  latitude?: number | null;
+  longitude?: number | null;
+} | null;
+
+// ---- AIフィル（文から what/where/when を抽出）----
+export async function aiFillRemote(text: string): Promise<AiFillResult> {
+  const endpoint = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
+  if (!endpoint) return null;
+
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo";
+  const now_iso = new Date().toISOString();
+  const locale = "ja-JP";
+
+  try {
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ text, tz, now_iso, locale }),
+    });
+    if (!r.ok) {
+      console.warn("aiFillRemote non-OK:", r.status);
+      return null;
+    }
+    const data: AiFillRemoteResponse = await r.json();
+
+    const when = data.start_iso ? new Date(data.start_iso) : null;
+    const endAt = data.end_iso ? new Date(data.end_iso) : null;
+
+    return {
+      what: data.what,
+      where: data.where_text,
+      when,
+      endAt,
+      latitude:
+        typeof data.latitude === "number" && Number.isFinite(data.latitude)
+          ? data.latitude
+          : null,
+      longitude:
+        typeof data.longitude === "number" && Number.isFinite(data.longitude)
+          ? data.longitude
+          : null,
+    };
+  } catch (e) {
+    console.error("aiFillRemote error", e);
+    return null;
+  }
+}
+
+// ---- タイトル生成（ダイレクト or フォールバックで /ai-fill に投げる）----
+export async function generateTitle(params: {
+  what?: string;
+  when?: Date | null;
+  where?: string;
+  tags?: string[];
+  capacity?: string;
+  fee?: string;
+}): Promise<string | null> {
+  const direct = process.env.EXPO_PUBLIC_AI_TITLE_ENDPOINT;
+  const fallback = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
+  const endpoint = direct || fallback;
+  if (!endpoint) return null;
+
+  const body = direct
+    ? {
+        what: params.what,
+        when_iso: params.when?.toISOString(),
+        where: params.where,
+        tags: params.tags,
+        capacity: params.capacity,
+        fee: params.fee,
+      }
+    : {
+        action: "generate_title",
+        input: {
+          what: params.what,
+          when_iso: params.when?.toISOString(),
+          where: params.where,
+          tags: params.tags,
+          capacity: params.capacity,
+          fee: params.fee,
+        },
+      };
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.warn("generateTitle non-OK:", res.status);
+      return null;
+    }
+    const json: any = await res.json().catch(() => ({}));
+    const t = (json?.title || json?.name || json?.data?.title || "")
+      .toString()
+      .trim();
+    return t || null;
+  } catch (e) {
+    console.error("generateTitle error", e);
+    return null;
+  }
+}
+
+// ---- アイコン自動分類（what から Lucide 名を選ぶ）----
 export type IconAIResponse = {
   icon?: string;
   iconName?: string;
   icon_name?: string;
 };
 
+const AI_ENDPOINT = process.env.EXPO_PUBLIC_AI_FILL_ENDPOINT;
+
 export async function classifyIconByAI(
   what: string,
   opts?: { signal?: AbortSignal },
 ): Promise<string | null> {
   if (!AI_ENDPOINT) return null;
+
   const body = {
     action: "icon_pick",
     input: { what },
-    // option: model or temperature is left to server implementation
   };
+
   try {
     const res = await fetch(AI_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify(body),
       signal: opts?.signal,
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn("classifyIconByAI non-OK:", res.status);
+      return null;
+    }
     const json: IconAIResponse | any = await res.json().catch(() => ({}));
     const name = (
       json?.iconName ||
@@ -33,26 +170,28 @@ export async function classifyIconByAI(
       json?.icon ||
       ""
     ).toString();
+
     if (!name) return null;
-    // normalize e.g., "utensils" -> "Utensils"
+
     const canonical = normalizeIconName(name);
     return isValidIcon(canonical) ? canonical : null;
-  } catch {
+  } catch (e) {
+    console.error("classifyIconByAI error", e);
     return null;
   }
 }
 
-function normalizeIconName(n: string): string {
+// ---- アイコン名の正規化＆存在チェック ----
+export function normalizeIconName(n: string): string {
   const trimmed = n.trim();
   if (!trimmed) return "";
-  // Try exact, then case-insensitive match
   if (isValidIcon(trimmed)) return trimmed;
-  const match = (iconNames as string[]).find(
-    (x) => x.toLowerCase() === trimmed.toLowerCase(),
-  );
-  return match ?? trimmed;
+
+  const list = iconNames as string[];
+  const ci = list.find((x) => x.toLowerCase() === trimmed.toLowerCase());
+  return ci ?? trimmed;
 }
 
-function isValidIcon(n: string) {
+export function isValidIcon(n: string) {
   return (iconNames as string[]).includes(n);
 }

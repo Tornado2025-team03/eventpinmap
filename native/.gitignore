@@ -37,6 +37,12 @@ yarn-error.*
 .env*
 .local
 
+# Supabase CLI (avoid committing temp/metadata)
+supabase/.temp/
+supabase/.env
+supabase/.metadata/
+supabase/.branches/
+
 # typescript
 *.tsbuildinfo
 

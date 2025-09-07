@@ -1,14 +1,13 @@
-// app/(tabs)/EventCreateScreen.tsx (refactored)
+// app/(tabs)/plan.tsx
 import React from "react";
 import {
   SafeAreaView,
   ScrollView,
-  Text,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { useEventForm } from "../../hooks/useEventForm";
-import { Step1 } from "../../components/events/Step1";
+import { Step1 } from "../../components/events/Step1Card";
 import { Step2 } from "../../components/events/Step2";
 import { Step3 } from "../../components/events/Step3";
 
@@ -16,33 +15,17 @@ export default function EventCreateScreen() {
   const f = useEventForm();
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F7F9FB" }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 72 : 0}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingTop: 16 }}
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets
         >
-          <Text
-            style={{
-              fontSize: 24,
-              fontWeight: "bold",
-              textAlign: "center",
-              marginBottom: 4,
-            }}
-          >
-            募集する
-          </Text>
-          <Text
-            style={{ textAlign: "center", color: "#666", marginBottom: 16 }}
-          >
-            必要事項を入力
-          </Text>
-
           {f.step === 1 && (
             <Step1
               title={f.title}
@@ -70,8 +53,11 @@ export default function EventCreateScreen() {
               openPicker={f.openPicker}
               onChangePicker={f.onChangePicker}
               setQuickDate={f.setQuickDate}
+              setStartTimeQuick={f.setStartTimeQuick}
+              setDurationQuick={f.setDurationQuick}
               next={f.next}
               canNext1={f.canNext1}
+              aiFill={f.aiFill}
             />
           )}
 
