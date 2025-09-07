@@ -23,6 +23,7 @@ import { supabase } from "../../lib/supabase";
 import { useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as LucideIcons from "lucide-react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type LatLng = { latitude: number; longitude: number };
 type Tag = { id: string; name: string };
@@ -417,12 +418,12 @@ export default function App() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1 }}>
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          paddingTop: 35,
+          // paddingTop: 35,
           padding: 8,
           backgroundColor: "#fff",
           borderBottomWidth: 1,
@@ -443,7 +444,7 @@ export default function App() {
           }}
           type="start"
         />
-        <Text style={{ marginHorizontal: 8 }}>〜</Text>
+        <Text style={{ marginHorizontal: 10 }}>〜</Text>
         <DateTimeInput
           value={searchEnd}
           onChange={setSearchEnd}
@@ -514,11 +515,27 @@ export default function App() {
                 onPress={() => handleMarkerPress(pin)}
                 tracksViewChanges={viewChanges}
               >
-                <IconComponent
-                  size={32}
-                  color={isHighlighted ? "red" : "#f6c604ff"}
-                  strokeWidth={2}
-                />
+                <View
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: 16, // half of width/height for circle
+                    width: 32,
+                    height: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.15,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                >
+                  <IconComponent
+                    size={32}
+                    color={isHighlighted ? "red" : "#f6c604ff"}
+                    strokeWidth={2}
+                  />
+                </View>
               </Marker>
             );
           })}
@@ -1092,7 +1109,7 @@ export default function App() {
           }}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
