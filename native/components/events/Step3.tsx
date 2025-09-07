@@ -5,7 +5,6 @@ import { SectionLabel } from "../ui/SectionLabel";
 import { PrimaryButton, OutlineButton } from "../ui/Button";
 import { LucideIcon } from "../LucideIcon";
 
-
 export function Step3(props: {
   what: string;
   formattedStart: string;
@@ -83,7 +82,6 @@ export function Step3(props: {
               <Text style={{ color: "#555" }}>{iconName}</Text>
             </View>
           ) : null}
-        </View>
         </View>
       </Card>
 
