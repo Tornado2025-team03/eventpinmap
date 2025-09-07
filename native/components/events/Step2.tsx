@@ -8,6 +8,8 @@ import {
   Switch,
 } from "react-native";
 import { chip } from "./styles";
+import { LucideIcon } from "../LucideIcon";
+import { IconPickerModal } from "./IconPickerModal";
 
 export function Step2(props: {
   tags: string[];
@@ -22,6 +24,10 @@ export function Step2(props: {
   setAddDetailsOpen: (b: boolean) => void;
   back: () => void;
   next: () => void;
+  iconName: string;
+  setIconName: (n: string) => void;
+  chooseIconManually: (n: string) => void;
+  resetIconAuto?: () => void;
 }) {
   const {
     tags,
@@ -36,7 +42,13 @@ export function Step2(props: {
     setAddDetailsOpen,
     back,
     next,
+    iconName,
+    setIconName,
+    chooseIconManually,
+    resetIconAuto,
   } = props;
+
+  const [iconModalOpen, setIconModalOpen] = React.useState(false);
 
   return (
     <View>
@@ -53,6 +65,51 @@ export function Step2(props: {
 
       {addDetailsOpen && (
         <>
+          <Text style={{ marginTop: 12 }}>イベントのアイコン</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingVertical: 8,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
+              <LucideIcon name={iconName} />
+              <Text style={{ color: "#555" }}>{iconName}</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setIconModalOpen(true)}
+                style={{
+                  backgroundColor: "#0a84ff",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "600" }}>変更</Text>
+              </TouchableOpacity>
+              {resetIconAuto && (
+                <TouchableOpacity
+                  onPress={() => resetIconAuto()}
+                  style={{
+                    backgroundColor: "#eee",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: "#333", fontWeight: "600" }}>
+                    自動に戻す
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
           <Text style={{ marginTop: 12 }}>雰囲気タグ（複数選択可）</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {[
@@ -146,6 +203,13 @@ export function Step2(props: {
           </View>
         </>
       )}
+
+      <IconPickerModal
+        visible={iconModalOpen}
+        value={iconName}
+        onClose={() => setIconModalOpen(false)}
+        onSelect={(n) => chooseIconManually(n)}
+      />
 
       <View
         style={{

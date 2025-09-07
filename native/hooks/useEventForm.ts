@@ -6,6 +6,9 @@ import { insertEvent, insertEventTagIds } from "../services/events";
 import { fetchTagOptionsByNames } from "../services/tagOptions";
 import { geocodeAddress, reverseGeocode } from "../services/geocode";
 import type { Rule, Step, TargetField } from "../types/event";
+import { pickLucideIconName } from "../services/iconPicker";
+import { classifyIconByAI } from "../services/ai";
+import iconNames from "../constants/lucideIconNames.json";
 
 function quickDate(kind: "today" | "tomorrow" | "weekend") {
   const now = new Date();
@@ -72,6 +75,9 @@ export function useEventForm() {
   const [fee, setFee] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [addDetailsOpen, setAddDetailsOpen] = React.useState(true);
+  // auto-picked icon name from lucide
+  const [iconName, setIconName] = React.useState<string>("Calendar");
+  const [iconLocked, setIconLocked] = React.useState(false);
 
   // Step 3
   const [rule, setRule] = React.useState<Rule>("open");
@@ -86,6 +92,30 @@ export function useEventForm() {
     setTargetField(target);
     setShowPicker(true);
   };
+
+  // Auto-pick icon whenever the main inputs change
+  React.useEffect(() => {
+    if (iconLocked) return;
+    const name = pickLucideIconName({ what });
+    setIconName(name);
+  }, [what, iconLocked]);
+
+  // Ask AI (Gemini via Edge Function) for a better pick when text changes
+  React.useEffect(() => {
+    if (iconLocked) return;
+    if (!what || !what.trim()) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      const ai = await classifyIconByAI(what, { signal: ctrl.signal });
+      if (ai && (iconNames as string[]).includes(ai)) {
+        setIconName(ai);
+      }
+    }, 500); // debounce
+    return () => {
+      ctrl.abort();
+      clearTimeout(t);
+    };
+  }, [what, iconLocked]);
 
   const onChangePicker = (_: any, selected?: Date) => {
     if (Platform.OS !== "ios") setShowPicker(false);
@@ -130,8 +160,8 @@ export function useEventForm() {
 
   const suggestedTitle = React.useMemo(() => {
     if (!what && !when) return "";
-    const datePart = when ? when.toLocaleDateString() : "日時未定";
-    return `『${what}』をする会（${datePart}）`;
+    // datePart was unused; remove to satisfy lint
+    return `『${what}』をする！！`;
   }, [what, when]);
 
   const canNext1 = true;
@@ -178,6 +208,7 @@ export function useEventForm() {
       status: rule,
       latitude,
       longitude,
+      icon: iconName || "Calendar",
     } as const;
 
     try {
@@ -273,6 +304,17 @@ export function useEventForm() {
     formattedEnd,
     suggestedTitle,
     canNext1,
+    iconName,
+    setIconName,
+    chooseIconManually(name: string) {
+      setIconLocked(true);
+      setIconName(name);
+    },
+    resetIconAuto() {
+      setIconLocked(false);
+      const name = pickLucideIconName({ what });
+      setIconName(name);
+    },
     // actions
     next,
     back,
@@ -295,7 +337,7 @@ export function useEventForm() {
         } else {
           Alert.alert("見つかりません", "住所から座標を取得できませんでした。");
         }
-      } catch (e: any) {
+      } catch {
         Alert.alert("エラー", "ジオコーディングでエラーが発生しました。");
       }
     },
