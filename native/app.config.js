@@ -2,11 +2,11 @@ import "dotenv/config";
 
 export default {
   expo: {
-    name: "eventpinmap",
-    slug: "eventpinmap",
+    name: "ヒマップ",
+    slug: "ヒマップ",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/images/icon-smaller.png",
     scheme: "eventpinmap",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
@@ -16,7 +16,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/images/adaptive-icon.png",
+        foregroundImage: "./assets/images/icon-smaller.png",
         backgroundColor: "#ffffff",
       },
       edgeToEdgeEnabled: true,
