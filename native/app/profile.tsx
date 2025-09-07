@@ -1,8 +1,9 @@
-import { Picker } from "@react-native-picker/picker";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import React, { useLayoutEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -11,12 +12,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../lib/supabase";
+
+// UIで使うStateの型定義
+type UiProfile = {
+  image: string | null;
+  nickname: string;
+  gender: string;
+  birthYear: string;
+  birthMonth: string;
+  birthDay: string;
+  bio: string;
+};
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  // プロフィールデータ一括管理
-  const [profile, setProfile] = useState({
-    image: null as string | null,
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<UiProfile>({
+    image: null,
     nickname: "",
     gender: "",
     birthYear: "",
@@ -24,17 +37,50 @@ export default function ProfileScreen() {
     birthDay: "",
     bio: "",
   });
-  const [genderPickerOpen, setGenderPickerOpen] = useState(false);
-  const [birthPickerOpen, setBirthPickerOpen] = useState(false);
 
-  // 保存処理（ダミー）
-  // 保存処理（DB/API連携用）
-  const handleSave = async () => {
-    // ここでDB保存処理を実装予定
-    // 例: await api.saveProfile(profile)
-    navigation.goBack();
-  };
+  // 画面表示時にSupabaseからデータを取得
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchProfile = async () => {
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) throw new Error("ユーザーが見つかりません");
 
+          const { data, error } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+
+          if (error && error.code !== "PGRST116") throw error;
+
+          if (data) {
+            const [year, month, day] = data.birth_date
+              ? data.birth_date.split("-")
+              : ["", "", ""];
+            setProfile({
+              image: data.profile_image_url || null,
+              nickname: data.nickname || "",
+              gender: data.gender || "",
+              birthYear: year,
+              birthMonth: month,
+              birthDay: day,
+              bio: data.bio || "",
+            });
+          }
+        } catch (error) {
+          if (error instanceof Error) Alert.alert("エラー", error.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchProfile();
+    }, []),
+  );
+
+  // ヘッダーに保存ボタンを設置
   useLayoutEffect(() => {
     navigation.setOptions({
       headerBackTitle: "設定",
@@ -48,7 +94,62 @@ export default function ProfileScreen() {
     });
   }, [navigation, profile]);
 
-  // 画像選択関数（expo-image-picker使用）
+  // 保存処理
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("ユーザーが見つかりません");
+
+      let newAvatarUrl = profile.image;
+
+      // 画像が新しく選択され、まだアップロードされていない場合
+      if (profile.image && !profile.image.startsWith("http")) {
+        const arraybuffer = await fetch(profile.image).then((res) =>
+          res.arrayBuffer(),
+        );
+        const fileExt = profile.image.split(".").pop()?.toLowerCase() ?? "jpeg";
+        const path = `${user.id}/${new Date().getTime()}.${fileExt}`;
+
+        const { data, error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(path, arraybuffer, {
+            contentType: `image/${fileExt}`,
+            upsert: true,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("avatars").getPublicUrl(data.path);
+        newAvatarUrl = publicUrl;
+      }
+
+      // 保存する項目を編集可能なもの（プロフィール画像・ニックネーム・自己紹介）だけに絞る
+      const updates = {
+        id: user.id,
+        nickname: profile.nickname,
+        bio: profile.bio,
+        profile_image_url: newAvatarUrl,
+        updated_at: new Date(),
+      };
+
+      const { error } = await supabase.from("user_profiles").upsert(updates);
+      if (error) throw error;
+
+      Alert.alert("成功", "プロフィールを保存しました。");
+      navigation.goBack();
+    } catch (error) {
+      if (error instanceof Error) Alert.alert("エラー", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 画像選択処理
   const handleSelectImage = async () => {
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -85,11 +186,20 @@ export default function ProfileScreen() {
     return age;
   };
 
+  if (loading) {
+    return (
+      <ActivityIndicator
+        size="large"
+        style={{ flex: 1, justifyContent: "center" }}
+      />
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {/* プロフィール画像 (変更可能) */}
       <View style={styles.profileImageBlock}>
         <View style={styles.profileImageContainer}>
-          {/* 画像があれば表示、なければグレー丸 */}
           {profile.image ? (
             <View style={styles.profileImageSelected}>
               <Image
@@ -103,10 +213,12 @@ export default function ProfileScreen() {
           )}
         </View>
         <TouchableOpacity onPress={handleSelectImage}>
-          <Text style={styles.selectImageText}>画像を選択する</Text>
+          <Text style={styles.selectImageText}>画像を変更する</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.divider} />
+
+      {/* ニックネーム (変更可能) */}
       <View style={styles.infoItem}>
         <Text style={styles.accountLabel}>ニックネーム</Text>
         <TextInput
@@ -119,136 +231,28 @@ export default function ProfileScreen() {
           placeholderTextColor="#888"
         />
       </View>
+
+      {/* 性別 (表示のみ) */}
       <View style={styles.infoItem}>
         <Text style={styles.accountLabel}>性別</Text>
-        <TouchableOpacity
-          onPress={() => setGenderPickerOpen(!genderPickerOpen)}
-        >
-          <View style={[styles.input, { justifyContent: "center" }]}>
-            <Text
-              style={{ color: profile.gender ? "#222" : "#888", fontSize: 15 }}
-            >
-              {profile.gender || "性別を選択"}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        {genderPickerOpen && (
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={profile.gender}
-              onValueChange={(itemValue) =>
-                setProfile((prev) => ({ ...prev, gender: itemValue }))
-              }
-            >
-              <Picker.Item label="男性" value="男性" />
-              <Picker.Item label="女性" value="女性" />
-              <Picker.Item label="その他" value="その他" />
-              <Picker.Item label="回答しない" value="回答しない" />
-            </Picker>
-            <TouchableOpacity
-              style={styles.confirmButton}
-              onPress={() => setGenderPickerOpen(false)}
-            >
-              <Text style={styles.confirmButtonText}>決定</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={[styles.input, styles.readOnlyField]}>
+          <Text style={styles.readOnlyText}>{profile.gender || "未設定"}</Text>
+        </View>
       </View>
+
+      {/* 生年月日 (表示のみ) */}
       <View style={styles.infoItem}>
         <Text style={styles.accountLabel}>生年月日</Text>
-        <TouchableOpacity onPress={() => setBirthPickerOpen(!birthPickerOpen)}>
-          <View style={[styles.input, { justifyContent: "center" }]}>
-            <Text
-              style={{
-                color:
-                  profile.birthYear && profile.birthMonth && profile.birthDay
-                    ? "#222"
-                    : "#888",
-                fontSize: 15,
-              }}
-            >
-              {profile.birthYear && profile.birthMonth && profile.birthDay
-                ? `${profile.birthYear}年 ${profile.birthMonth}月 ${profile.birthDay}日（${getAge()}歳）`
-                : "生年月日を選択"}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        {birthPickerOpen && (
-          <View style={styles.pickerContainer}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                gap: 4,
-              }}
-            >
-              <View style={{ flex: 1, minWidth: 80 }}>
-                <Picker
-                  selectedValue={profile.birthYear}
-                  style={{ width: "100%" }}
-                  onValueChange={(itemValue) =>
-                    setProfile((prev) => ({ ...prev, birthYear: itemValue }))
-                  }
-                >
-                  <Picker.Item label="年" value="" />
-                  {[...Array(80)].map((_, i) => {
-                    const year = new Date().getFullYear() - i;
-                    return (
-                      <Picker.Item
-                        key={year}
-                        label={`${year}`}
-                        value={String(year)}
-                      />
-                    );
-                  })}
-                </Picker>
-              </View>
-              <View style={{ flex: 1, minWidth: 60 }}>
-                <Picker
-                  selectedValue={profile.birthMonth}
-                  style={{ width: "100%" }}
-                  onValueChange={(itemValue) =>
-                    setProfile((prev) => ({ ...prev, birthMonth: itemValue }))
-                  }
-                >
-                  <Picker.Item label="月" value="" />
-                  {[...Array(12)].map((_, i) => (
-                    <Picker.Item
-                      key={i + 1}
-                      label={`${i + 1}`}
-                      value={String(i + 1)}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              <View style={{ flex: 1, minWidth: 60 }}>
-                <Picker
-                  selectedValue={profile.birthDay}
-                  style={{ width: "100%" }}
-                  onValueChange={(itemValue) =>
-                    setProfile((prev) => ({ ...prev, birthDay: itemValue }))
-                  }
-                >
-                  <Picker.Item label="日" value="" />
-                  {[...Array(31)].map((_, i) => (
-                    <Picker.Item
-                      key={i + 1}
-                      label={`${i + 1}`}
-                      value={String(i + 1)}
-                    />
-                  ))}
-                </Picker>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.confirmButton}
-              onPress={() => setBirthPickerOpen(false)}
-            >
-              <Text style={styles.confirmButtonText}>決定</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={[styles.input, styles.readOnlyField]}>
+          <Text style={styles.readOnlyText}>
+            {profile.birthYear && profile.birthMonth && profile.birthDay
+              ? `${profile.birthYear}年 ${profile.birthMonth}月 ${profile.birthDay}日（${getAge()}歳）`
+              : "未設定"}
+          </Text>
+        </View>
       </View>
+
+      {/* 自己紹介 (変更可能) */}
       <View style={styles.infoItem}>
         <Text style={styles.accountLabel}>自己紹介</Text>
         <TextInput
@@ -267,26 +271,10 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  pickerContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    marginTop: 4,
-    marginBottom: 8,
-    overflow: "hidden",
-  },
   container: {
     padding: 24,
     backgroundColor: "#fff",
     minHeight: "100%",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 8,
-    marginTop: 4,
-    color: "#222",
   },
   profileImageBlock: {
     alignItems: "center",
@@ -314,11 +302,6 @@ const styles = StyleSheet.create({
     borderRadius: 46,
     backgroundColor: "#eee",
   },
-  profileImage: {
-    fontSize: 24,
-    color: "#4285F4",
-    fontWeight: "bold",
-  },
   profileImageSelected: {
     width: 92,
     height: 92,
@@ -335,12 +318,12 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   infoItem: {
-    marginBottom: 4,
+    marginBottom: 12,
   },
   accountLabel: {
     fontSize: 14,
     color: "#000",
-    marginTop: 4,
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
@@ -349,25 +332,18 @@ const styles = StyleSheet.create({
     padding: 10,
     fontSize: 15,
     backgroundColor: "#fafafa",
-    marginBottom: 8,
+  },
+  // ★★★ 追加: 表示専用フィールドのスタイル ★★★
+  readOnlyField: {
+    backgroundColor: "#f0f0f0", // 少し色を変えて編集不可を表現
+    justifyContent: "center",
+  },
+  readOnlyText: {
+    fontSize: 15,
+    color: "#555", // 少し濃いめのグレー
   },
   textarea: {
     height: 80,
     textAlignVertical: "top",
-  },
-  confirmButton: {
-    alignSelf: "flex-end",
-    margin: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    backgroundColor: "#1976d2",
-    borderRadius: 20,
-    minWidth: 80,
-  },
-  confirmButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    textAlign: "center",
   },
 });

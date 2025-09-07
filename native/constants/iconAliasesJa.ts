@@ -1,0 +1,36 @@
+// Japanese keyword -> suggested lucide icon names
+// Extend freely as needed
+const iconAliasesJa: Record<string, string[]> = {
+  映画: ["Film", "Clapperboard", "Popcorn"],
+  鑑賞: ["Film", "Clapperboard"],
+  配信: ["TvMinimalPlay", "MonitorPlay"],
+  テレビ: ["TvMinimalPlay"],
+  勉強: ["BookOpen", "NotebookPen"],
+  学習: ["BookOpen", "GraduationCap"],
+  読書: ["BookOpen", "Library"],
+  もくもく: ["Focus", "BookOpen"],
+  ゲーム: ["Gamepad2", "Joystick"],
+  スポーツ: ["Dumbbell", "Trophy"],
+  運動: ["Dumbbell"],
+  筋トレ: ["Dumbbell"],
+  飲み会: ["Beer"],
+  酒: ["Beer"],
+  カフェ: ["Coffee", "CupSoda"],
+  コーヒー: ["Coffee"],
+  写真: ["Camera", "GalleryVerticalEnd"],
+  撮影: ["Camera"],
+  旅行: ["Plane", "Luggage"],
+  おでかけ: ["MapPin", "Map"],
+  地図: ["Map", "MapPin"],
+  場所: ["MapPin"],
+  食事: ["Utensils", "Sandwich"],
+  ランチ: ["Utensils"],
+  ディナー: ["Utensils"],
+  交流: ["Users", "Handshake"],
+  友達: ["UserRound", "Users"],
+  仲間: ["Users"],
+  パーティ: ["PartyPopper"],
+  お祝い: ["PartyPopper"],
+};
+
+export default iconAliasesJa;

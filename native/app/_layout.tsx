@@ -32,7 +32,6 @@ export default function RootLayout() {
           <Stack.Screen name="notice" options={{ title: "お知らせ" }} />
           <Stack.Screen name="help" options={{ title: "ヘルプセンター" }} />
           <Stack.Screen name="terms" options={{ title: "利用規約" }} />
-          <Stack.Screen name="version" options={{ title: "バージョン情報" }} />
           <Stack.Screen name="+not-found" />
         </Stack>
         <StatusBar style="auto" />

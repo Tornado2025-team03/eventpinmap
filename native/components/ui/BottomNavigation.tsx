@@ -51,10 +51,12 @@ export default function BottomNavigation({
                 style={styles.tabButton}
                 onPress={() => handleTabPress(tab.key, index)}
               >
-                <Icon
-                  size={24}
-                  color={isActive ? colors.active : colors.inactive}
-                />
+                {Icon && (
+                  <Icon
+                    size={24}
+                    color={isActive ? colors.active : colors.inactive}
+                  />
+                )}
                 <Text
                   style={[
                     styles.tabLabel,
