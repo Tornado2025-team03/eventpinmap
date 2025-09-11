@@ -41,12 +41,12 @@ function AvailableUserItem({
         <Text style={styles.userName}>
           {user.display_name || `User ${user.id.substring(0, 8)}`}
         </Text>
-        <Text style={styles.userStatus}>
+        {/* <Text style={styles.userStatus}>
           最終利用可能:{" "}
           {user.last_active
             ? new Date(user.last_active).toLocaleString("ja-JP")
             : "不明"}
-        </Text>
+        </Text> */}
       </View>
       <View style={[styles.checkbox, isSelected && styles.checkedBox]}>
         {isSelected && <Text style={styles.checkmark}>✓</Text>}
@@ -321,26 +321,26 @@ export default function ConnectScreen() {
                 <Text style={styles.statusText}>
                   ステータス:{" "}
                   {currentUserStatus.status === "available"
-                    ? "利用可能"
-                    : currentUserStatus.status}
+                    ? "オンライン"
+                    : "オフライン"}
                 </Text>
-                {currentUserStatus.status === "available" && (
+                {/* {currentUserStatus.status === "available" && (
                   <Text style={styles.statusTime}>
                     {currentUserStatus.end_at
                       ? `利用可能期限: ${new Date(currentUserStatus.end_at).toLocaleString("ja-JP")}`
                       : "無期限で利用可能"}
                   </Text>
-                )}
+                )} */}
               </>
             ) : (
               <Text style={styles.statusText}>ステータス: 未設定</Text>
             )}
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.setAvailableButton}
               onPress={handleSetAvailable}
             >
               <Text style={styles.setAvailableButtonText}>利用可能に設定</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 
