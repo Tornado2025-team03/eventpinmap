@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Alert,
-  Modal,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,16 +11,15 @@ import {
 } from "react-native";
 import { useAuth } from "../../provider/AuthProvider";
 import {
-  getOrganizerEvents,
-  getAvailableUsers,
-  inviteIdleUsers,
+  inviteUsersToEvent,
   setUserStatusAvailable,
   getUserStatus,
-  createTestAvailableUsers,
   type OrganizerEvent,
   type AvailableUser,
 } from "../../services/organizer";
+import { getMatchingUsersAndEvents } from "@/services/getConnec";
 import { useRouter } from "expo-router";
+import { supabase } from "../../lib/supabase";
 
 interface AvailableUserItemProps {
   user: AvailableUser;
@@ -35,15 +32,9 @@ function AvailableUserItem({
   isSelected,
   onToggle,
 }: AvailableUserItemProps) {
-  const isDemo = user.id.startsWith("demo-user-");
-
   return (
     <TouchableOpacity
-      style={[
-        styles.userItem,
-        isSelected && styles.selectedUserItem,
-        isDemo && styles.demoUserItem,
-      ]}
+      style={[styles.userItem, isSelected && styles.selectedUserItem]}
       onPress={() => onToggle(user.id)}
     >
       <View style={styles.userInfo}>
@@ -128,11 +119,20 @@ export default function ConnectScreen() {
     if (!session?.user?.id) return;
 
     try {
-      const eventList = await getOrganizerEvents(session.user.id);
-      setEvents(eventList);
+      const now = new Date().toISOString();
+      // Fetch events where user is organizer and start_at is in the future
+      const { data: eventList, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("created_by", session.user.id)
+        .gte("start_at", now)
+        .order("start_at", { ascending: true });
+
+      if (error) throw error;
+      setEvents(eventList || []);
 
       // 最初のイベントを自動選択
-      if (eventList.length > 0 && !selectedEventId) {
+      if (eventList && eventList.length > 0 && !selectedEventId) {
         setSelectedEventId(eventList[0].id);
       }
     } catch (error: any) {
@@ -141,7 +141,7 @@ export default function ConnectScreen() {
     }
   }, [session?.user?.id, selectedEventId]);
 
-  // 利用可能なユーザーを取得
+  // 利用可能なユーザーを取得（マッチしたユーザーのみ表示）
   const loadAvailableUsers = useCallback(async () => {
     if (!selectedEventId) {
       setAvailableUsers([]);
@@ -150,48 +150,20 @@ export default function ConnectScreen() {
 
     setLoading(true);
     try {
-      const users = await getAvailableUsers(selectedEventId);
+      // Get all matched user-event pairs
+      const matches = await getMatchingUsersAndEvents();
 
-      // 実際のユーザーが0人の場合、デモ用データを表示
-      if (users.length === 0) {
-        console.log("No real users available, showing demo users");
-        const demoUsers: AvailableUser[] = [
-          {
-            id: "demo-user-1",
-            display_name: "ゆうき",
-            avatar_url: null,
-            last_active: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30分前
-          },
-          {
-            id: "demo-user-2",
-            display_name: "あかり",
-            avatar_url: null,
-            last_active: new Date(Date.now() - 15 * 60 * 1000).toISOString(), // 15分前
-          },
-          {
-            id: "demo-user-3",
-            display_name: "だいき",
-            avatar_url: null,
-            last_active: new Date(Date.now() - 45 * 60 * 1000).toISOString(), // 45分前
-          },
-          {
-            id: "demo-user-4",
-            display_name: "みお",
-            avatar_url: null,
-            last_active: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1時間前
-          },
-          {
-            id: "demo-user-5",
-            display_name: "りょう",
-            avatar_url: null,
-            last_active: new Date(Date.now() - 10 * 60 * 1000).toISOString(), // 10分前
-          },
-        ];
-        setAvailableUsers(demoUsers);
-      } else {
-        setAvailableUsers(users);
-      }
+      // Filter for the selected event
+      const matchedUsers = matches
+        .filter(({ event }) => event.id === selectedEventId)
+        .map(({ user }) => ({
+          id: user.user_id, // user_profiles.id
+          display_name: user.display_name || `User ${user.user_id.slice(0, 8)}`,
+          avatar_url: user.avatar_url || null,
+          last_active: user.start_at,
+        }));
 
+      setAvailableUsers(matchedUsers);
       setSelectedUsers(new Set()); // 選択をリセット
     } catch (error: any) {
       console.error("Error loading available users:", error);
@@ -268,21 +240,7 @@ export default function ConnectScreen() {
       return;
     }
 
-    // デモユーザーを除外
-    const realUserIds = Array.from(selectedUsers).filter(
-      (id) => !id.startsWith("demo-user-"),
-    );
-    const demoUserCount = selectedUsers.size - realUserIds.length;
-
-    if (demoUserCount > 0 && realUserIds.length === 0) {
-      Alert.alert(
-        "招待完了",
-        `${demoUserCount}人のユーザーに招待を送信しました！\n\n※ この機能のデモンストレーションです。実際のアプリでは本物のユーザーに招待が送信されます。`,
-      );
-      // リストを更新（選択をクリア）
-      setSelectedUsers(new Set());
-      return;
-    }
+    const realUserIds = Array.from(selectedUsers);
 
     Alert.alert(
       "招待を送信しますか？",
@@ -295,15 +253,10 @@ export default function ConnectScreen() {
             setInviting(true);
             try {
               if (realUserIds.length > 0) {
-                await inviteIdleUsers(selectedEventId, realUserIds);
+                await inviteUsersToEvent(selectedEventId, realUserIds);
               }
 
-              const message =
-                demoUserCount > 0 && realUserIds.length === 0
-                  ? `${demoUserCount}人のユーザーに招待を送信しました！\n\n※ この機能のデモンストレーションです。`
-                  : `招待を送信しました！${demoUserCount > 0 ? `\n(${demoUserCount}人はデモユーザーです)` : ""}`;
-
-              Alert.alert("成功", message);
+              Alert.alert("成功", "招待を送信しました！");
 
               // リストを更新
               await loadAvailableUsers();
@@ -392,58 +345,65 @@ export default function ConnectScreen() {
         </View>
 
         {/* イベント選択 */}
-        {events.length > 0 && (
-          <EventSelector
-            events={events}
-            selectedEventId={selectedEventId}
-            onSelectEvent={setSelectedEventId}
-          />
-        )}
-
-        {/* 利用可能ユーザー一覧 */}
-        <View style={styles.usersSection}>
-          <View style={styles.usersSectionHeader}>
-            <Text style={styles.sectionTitle}>
-              利用可能なユーザー ({availableUsers.length}人)
-            </Text>
-            {availableUsers.length > 0 && (
-              <TouchableOpacity onPress={toggleSelectAll}>
-                <Text style={styles.selectAllText}>
-                  {selectedUsers.size === availableUsers.length
-                    ? "全解除"
-                    : "全選択"}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>読み込み中...</Text>
-            </View>
-          ) : availableUsers.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                現在利用可能なユーザーはいません
-              </Text>
-              <Text style={styles.emptySubtext}>
-                他のユーザーが利用可能ステータスを設定するまでお待ちください
-              </Text>
-            </View>
+        <View style={styles.eventSelector}>
+          {events.length > 0 ? (
+            <EventSelector
+              events={events}
+              selectedEventId={selectedEventId}
+              onSelectEvent={setSelectedEventId}
+            />
           ) : (
-            <View style={styles.usersList}>
-              {availableUsers.map((user) => (
-                <AvailableUserItem
-                  key={user.id}
-                  user={user}
-                  isSelected={selectedUsers.has(user.id)}
-                  onToggle={toggleUserSelection}
-                />
-              ))}
+            <View style={styles.noEventContainer}>
+              <Text style={styles.noEventText}>イベントを企画してみよう！</Text>
             </View>
           )}
         </View>
+        {/* 利用可能ユーザー一覧 */}
+        {events.length > 0 && (
+          <View style={styles.usersSection}>
+            <View style={styles.usersSectionHeader}>
+              <Text style={styles.sectionTitle}>
+                利用可能なユーザー ({availableUsers.length}人)
+              </Text>
+              {availableUsers.length > 0 && (
+                <TouchableOpacity onPress={toggleSelectAll}>
+                  <Text style={styles.selectAllText}>
+                    {selectedUsers.size === availableUsers.length
+                      ? "全解除"
+                      : "全選択"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text style={styles.loadingText}>読み込み中...</Text>
+              </View>
+            ) : availableUsers.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  現在利用可能なユーザーはいません
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  他のユーザーが利用可能ステータスを設定するまでお待ちください
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.usersList}>
+                {availableUsers.map((user) => (
+                  <AvailableUserItem
+                    key={user.id}
+                    user={user}
+                    isSelected={selectedUsers.has(user.id)}
+                    onToggle={toggleUserSelection}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* 招待ボタン */}
@@ -470,6 +430,9 @@ export default function ConnectScreen() {
     </View>
   );
 }
+
+// ...styles definition remains unchanged...
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -625,11 +588,6 @@ const styles = StyleSheet.create({
   selectedUserItem: {
     backgroundColor: "#E3F2FD",
   },
-  demoUserItem: {
-    backgroundColor: "#F8F9FA",
-    borderLeftWidth: 3,
-    borderLeftColor: "#6C757D",
-  },
   userInfo: {
     flex: 1,
   },
@@ -685,6 +643,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
     textAlign: "center",
-    marginTop: 40,
+  },
+  noEventContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    margin: 16,
+  },
+  noEventText: {
+    fontSize: 18,
+    color: "#666",
+    fontWeight: "bold",
   },
 });
