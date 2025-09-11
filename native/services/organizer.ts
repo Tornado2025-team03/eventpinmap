@@ -359,7 +359,7 @@ export async function getAvailableUsers(
     const result = filteredStatuses.map((status: any) => {
       const profile = userProfiles?.find((p: any) => p.id === status.user_id);
       return {
-        id: status.user_id,
+        id: status.user_id, // This is user_profiles.id
         display_name: profile?.nickname || `User ${status.user_id.slice(0, 8)}`,
         avatar_url: profile?.profile_image_url || null,
         last_active: status.start_at,
@@ -547,4 +547,46 @@ export async function createAnnouncement(
   });
 
   if (error) throw error;
+}
+
+export async function inviteUsersToEvent(eventId: string, userIds: string[]) {
+  console.log("inviteUsersToEvent called with:", { eventId, userIds });
+  for (const userId of userIds) {
+    const { data: member, error } = await supabase
+      .from("event_members")
+      .select("*")
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .single();
+
+    if (error && error.code === "PGRST116") {
+      // No member exists, so insert
+      const { error: insertError, data: insertData } = await supabase
+        .from("event_members")
+        .insert({
+          event_id: eventId,
+          user_id: userId,
+          role: "invited",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      console.log("Insert result:", { insertError, insertData });
+      continue;
+    }
+
+    if (error) {
+      // Other error
+      console.error(`Error fetching member for user ${userId}:`, error);
+      continue;
+    }
+
+    if (member) {
+      // Member exists, update role
+      const { error: updateError, data: updateData } = await supabase
+        .from("event_members")
+        .update({ role: "invited", updated_at: new Date().toISOString() })
+        .eq("id", member.id);
+      console.log("Update result:", { updateError, updateData });
+    }
+  }
 }
