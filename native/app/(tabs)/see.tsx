@@ -182,14 +182,22 @@ export default function App() {
       Alert.alert("ログインしてください");
       return;
     }
+    const now = new Date();
+    const oneMinuteAgo = new Date(now.getTime() + 1 * 1000);
+    const startAt = now.toISOString();
+    const endAt = oneMinuteAgo.toISOString();
+
+    // Debug log
+    console.log("setUserStatusHidden:", { userId, startAt, endAt });
+
     const { error } = await supabase.from("user_statuses").upsert(
       {
         user_id: userId,
         status: "hidden",
         latitude: null,
         longitude: null,
-        start_at: new Date().toISOString(),
-        end_at: null,
+        start_at: startAt,
+        end_at: endAt,
       },
       { onConflict: "user_id" },
     );
@@ -200,6 +208,7 @@ export default function App() {
     setMyAvailablePin(null);
     Alert.alert("ステータスをオフラインにしました");
   }
+
   // Row → Pin 変換
   const rowToPin = useCallback((r: EventRow): Pin | null => {
     const lat = r.latitude != null ? Number(r.latitude) : NaN;

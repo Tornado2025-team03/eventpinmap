@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
+  Image,
   Alert,
   RefreshControl,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  SafeAreaView,
 } from "react-native";
 import { useAuth } from "../../provider/AuthProvider";
 import {
@@ -37,16 +39,19 @@ function AvailableUserItem({
       style={[styles.userItem, isSelected && styles.selectedUserItem]}
       onPress={() => onToggle(user.id)}
     >
+      {/* Avatar on the left */}
+      <Image
+        source={
+          user.avatar_url
+            ? { uri: user.avatar_url }
+            : require("../../assets/images/react-logo.png") // fallback image
+        }
+        style={styles.avatar}
+      />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>
           {user.display_name || `User ${user.id.substring(0, 8)}`}
         </Text>
-        {/* <Text style={styles.userStatus}>
-          最終利用可能:{" "}
-          {user.last_active
-            ? new Date(user.last_active).toLocaleString("ja-JP")
-            : "不明"}
-        </Text> */}
       </View>
       <View style={[styles.checkbox, isSelected && styles.checkedBox]}>
         {isSelected && <Text style={styles.checkmark}>✓</Text>}
@@ -158,11 +163,11 @@ export default function ConnectScreen() {
         .filter(({ event }) => event.id === selectedEventId)
         .map(({ user }) => ({
           id: user.user_id, // user_profiles.id
-          display_name: user.display_name || `User ${user.user_id.slice(0, 8)}`,
+          display_name: user.nickname || `User ${user.user_id.slice(0, 8)}`,
           avatar_url: user.avatar_url || null,
           last_active: user.start_at,
         }));
-
+      // console.log("Matched Users:", matches);
       setAvailableUsers(matchedUsers);
       setSelectedUsers(new Set()); // 選択をリセット
     } catch (error: any) {
@@ -298,7 +303,7 @@ export default function ConnectScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         refreshControl={
@@ -427,7 +432,7 @@ export default function ConnectScreen() {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -442,7 +447,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
     backgroundColor: "#007AFF",
@@ -656,5 +661,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#666",
     fontWeight: "bold",
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: "#eee",
   },
 });
