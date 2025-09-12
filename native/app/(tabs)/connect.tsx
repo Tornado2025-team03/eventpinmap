@@ -107,8 +107,8 @@ function EventSelector({
 }
 
 export default function ConnectScreen() {
-  const { session } = useAuth();
-  const router = useRouter();
+  // const { session } = useAuth();
+  // const router = useRouter();
 
   const [events, setEvents] = useState<OrganizerEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -118,10 +118,19 @@ export default function ConnectScreen() {
   const [inviting, setInviting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserStatus, setCurrentUserStatus] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
+  useEffect(() => {
+    async function fetchUserId() {
+      const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+      setUserId(user?.data?.user?.id ?? null);
+    }
+    fetchUserId();
+  }, []);
   // イベント一覧を取得
   const loadEvents = useCallback(async () => {
-    if (!session?.user?.id) return;
+    if (!userId) return;
+    // if (!session?.user?.id) return;
 
     try {
       const now = new Date().toISOString();
@@ -129,7 +138,7 @@ export default function ConnectScreen() {
       const { data: eventList, error } = await supabase
         .from("events")
         .select("*")
-        .eq("created_by", session.user.id)
+        .eq("created_by", userId)
         .gte("start_at", now)
         .order("start_at", { ascending: true });
 
@@ -144,7 +153,7 @@ export default function ConnectScreen() {
       console.error("Error loading events:", error);
       Alert.alert("エラー", "イベント一覧の取得に失敗しました");
     }
-  }, [session?.user?.id, selectedEventId]);
+  }, [userId, selectedEventId]);
 
   // 利用可能なユーザーを取得（マッチしたユーザーのみ表示）
   const loadAvailableUsers = useCallback(async () => {
@@ -180,15 +189,15 @@ export default function ConnectScreen() {
 
   // 現在のユーザーステータスを取得
   const loadCurrentUserStatus = useCallback(async () => {
-    if (!session?.user?.id) return;
+    if (!userId) return;
 
     try {
-      const status = await getUserStatus(session.user.id);
+      const status = await getUserStatus(userId);
       setCurrentUserStatus(status);
     } catch (error: any) {
       console.error("Error loading user status:", error);
     }
-  }, [session?.user?.id]);
+  }, [userId]);
 
   // 初期データ読み込み
   useEffect(() => {
@@ -278,29 +287,36 @@ export default function ConnectScreen() {
   };
 
   // テスト用：自分を利用可能に設定
-  const handleSetAvailable = async () => {
-    if (!session?.user?.id) {
-      Alert.alert("エラー", "ユーザーIDが取得できません");
-      return;
-    }
+  // const handleSetAvailable = async () => {
+  //   if (!session?.user?.id) {
+  //     Alert.alert("エラー", "ユーザーIDが取得できません");
+  //     return;
+  //   }
 
-    try {
-      await setUserStatusAvailable(session.user.id);
-      Alert.alert("成功", "あなたのステータスを利用可能に設定しました");
-      await loadCurrentUserStatus();
-    } catch (error: any) {
-      console.error("Error setting user available:", error);
-      Alert.alert("エラー", "ステータス設定に失敗しました");
-    }
-  };
+  //   try {
+  //     await setUserStatusAvailable(session.user.id);
+  //     Alert.alert("成功", "あなたのステータスを利用可能に設定しました");
+  //     await loadCurrentUserStatus();
+  //   } catch (error: any) {
+  //     console.error("Error setting user available:", error);
+  //     Alert.alert("エラー", "ステータス設定に失敗しました");
+  //   }
+  // };
 
-  if (!session?.user) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>ログインが必要です</Text>
-      </View>
-    );
-  }
+  // if (!session?.user) {
+  //   console.log(session.user);
+  //   return (
+  //     <View style={styles.container}>
+  //       <Text style={styles.errorText}>ログインが必要です</Text>
+  //     </View>
+  //   );
+  // } else {
+  //   console.log("Current User ID:", session);
+  // }
+  // Remove duplicate userId declaration here
+  // const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+  // const userId = user?.data?.user?.id;
+  // if (!userId) return;
 
   return (
     <SafeAreaView style={styles.container}>
