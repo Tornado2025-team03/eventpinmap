@@ -321,25 +321,25 @@ export default function ConnectScreen() {
         <View style={styles.statusSection}>
           <Text style={styles.sectionTitle}>あなたの状態</Text>
           <View style={styles.statusCard}>
-            {currentUserStatus ? (
-              <>
-                <Text style={styles.statusText}>
-                  ステータス:{" "}
-                  {currentUserStatus.status === "available"
-                    ? "オンライン"
-                    : "オフライン"}
-                </Text>
-                {/* {currentUserStatus.status === "available" && (
+            {/* {currentUserStatus ? ( */}
+            <>
+              <Text style={styles.statusText}>
+                ステータス:{" "}
+                {currentUserStatus.status === "available"
+                  ? "オンライン"
+                  : "オフライン"}
+              </Text>
+              {/* {currentUserStatus.status === "available" && (
                   <Text style={styles.statusTime}>
                     {currentUserStatus.end_at
                       ? `利用可能期限: ${new Date(currentUserStatus.end_at).toLocaleString("ja-JP")}`
                       : "無期限で利用可能"}
                   </Text>
                 )} */}
-              </>
-            ) : (
+            </>
+            {/* ) : (
               <Text style={styles.statusText}>ステータス: 未設定</Text>
-            )}
+            )} */}
             {/* <TouchableOpacity
               style={styles.setAvailableButton}
               onPress={handleSetAvailable}
