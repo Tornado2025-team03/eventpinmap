@@ -144,6 +144,36 @@ export default function App() {
     endAt: Date;
   } | null>(null);
 
+  async function fetchMyStatus() {
+    const user = supabase.auth.getUser ? await supabase.auth.getUser() : null;
+    const userId = user?.data?.user?.id;
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from("user_statuses")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !data) return;
+
+    if (
+      data.status === "available" &&
+      data.latitude &&
+      data.longitude &&
+      data.start_at &&
+      data.end_at
+    ) {
+      setMyAvailablePin({
+        coord: { latitude: data.latitude, longitude: data.longitude },
+        startAt: new Date(data.start_at),
+        endAt: new Date(data.end_at),
+      });
+    } else {
+      setMyAvailablePin(null);
+    }
+  }
+
   async function setUserStatusAvailable(
     coord: { latitude: number; longitude: number },
     startAt: Date,
@@ -303,6 +333,9 @@ export default function App() {
   useEffect(() => {
     loadEvents();
   }, [loadEvents]);
+  useEffect(() => {
+    fetchMyStatus();
+  }, []);
 
   // Realtime購読（INSERT/UPDATE/DELETE）
   useEffect(() => {
